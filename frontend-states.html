@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Joan's Academic Hub — Frontend States</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      color: #1a1a1a;
+      line-height: 1.7;
+      padding: 2rem;
+    }
+    h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.5rem; }
+    h2 { font-size: 18px; font-weight: 500; margin-top: 2rem; margin-bottom: 1rem; }
+    h3 { font-size: 16px; font-weight: 500; margin-bottom: 0.5rem; }
+    p { font-size: 16px; font-weight: 400; color: #666; margin-bottom: 1rem; }
+
+    .card {
+      background: white;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+    .box {
+      background: #f5f5f3;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .box-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .box-sub { font-size: 12px; color: #888; }
+
+    .c-teal { background: #e1f5ee; border-color: #1d9e75; }
+    .c-blue { background: #e6f1fb; border-color: #378add; }
+    .c-purple { background: #eeedfe; border-color: #534ab7; }
+    .c-coral { background: #faceb7; border-color: #d85a30; }
+    .c-amber { background: #faeeda; border-color: #ba7517; }
+    .c-gray { background: #f1efe8; border-color: #888780; }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin: 2px;
+    }
+    .tag-public { background: #e1f5ee; color: #0f6e56; }
+    .tag-protected { background: #e6f1fb; color: #0c447c; }
+    .tag-admin { background: #faceb7; color: #712b13; }
+    .tag-guard { background: #faeeda; color: #633806; }
+
+    .metric {
+      background: #f5f5f3;
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .metric-label { font-size: 13px; color: #888; margin-bottom: 4px; }
+    .metric-value { font-size: 24px; font-weight: 500; }
+
+    .arrow-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #888;
+      font-size: 12px;
+      margin: 4px 0;
+    }
+    .arrow-line::before, .arrow-line::after {
+      content: '';
+      flex: 1;
+      border-bottom: 0.5px solid rgba(0,0,0,0.15);
+      margin: 0 8px;
+    }
+
+    svg { width: 100%; height: auto; display: block; }
+
+    .page-preview {
+      background: white;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      border-radius: 12px;
+      padding: 1rem;
+      min-height: 200px;
+    }
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 0.5px solid rgba(0,0,0,0.1);
+    }
+    .page-icon {
+      width: 40px; height: 40px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .page-title { font-size: 15px; font-weight: 500; }
+    .page-desc { font-size: 13px; color: #888; }
+
+    .status-ok { color: #0f6e56; }
+    .status-warn { color: #ba7517; }
+    .status-err { color: #a32d2d; }
+
+    code {
+      background: #f5f5f3;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Joan's Academic Hub — Frontend Ideal States</h1>
+<p>System architecture, route structure, and ideal page states after login</p>
+
+<!-- Section 1: Route Architecture -->
+<div class="card">
+  <h2>1. Route Architecture</h2>
+  <svg viewBox="0 0 680 400" width="100%">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+
+    <!-- Public Routes -->
+    <text x="40" y="30" style="font-size:16px;font-weight:500;">Public Routes</text>
+
+    <rect x="40" y="40" width="160" height="44" rx="8" fill="#e1f5ee" stroke="#1d9e75" stroke-width="0.5"/>
+    <text x="120" y="62" text-anchor="middle" style="font-size:14px;font-weight:500;">/login</text>
+    <text x="120" y="78" text-anchor="middle" style="font-size:12px;fill:#666;">AuthPage</text>
+
+    <rect x="40" y="100" width="160" height="44" rx="8" fill="#e1f5ee" stroke="#1d9e75" stroke-width="0.5"/>
+    <text x="120" y="122" text-anchor="middle" style="font-size:14px;font-weight:500;">/gallery</text>
+    <text x="120" y="138" text-anchor="middle" style="font-size:12px;fill:#666;">GalleryPage</text>
+
+    <rect x="40" y="160" width="160" height="44" rx="8" fill="#e1f5ee" stroke="#1d9e75" stroke-width="0.5"/>
+    <text x="120" y="182" text-anchor="middle" style="font-size:14px;font-weight:500;">/u/:username</text>
+    <text x="120" y="198" text-anchor="middle" style="font-size:12px;fill:#666;">PublicProfilePage</text>
+
+    <!-- Arrow down -->
+    <line x1="120" y1="204" x2="120" y2="230" stroke="#aaa" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Auth Guard -->
+    <rect x="40" y="232" width="160" height="56" rx="8" fill="#faeeda" stroke="#ba7517" stroke-width="0.5"/>
+    <text x="120" y="254" text-anchor="middle" style="font-size:14px;font-weight:500;">RequireAuth</text>
+    <text x="120" y="270" text-anchor="middle" style="font-size:12px;fill:#666;">Check login state</text>
+    <text x="120" y="286" text-anchor="middle" style="font-size:12px;fill:#666;">from store + localStorage</text>
+
+    <line x1="120" y1="290" x2="120" y2="310" stroke="#aaa" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Dashboard -->
+    <rect x="40" y="312" width="160" height="44" rx="8" fill="#e6f1fb" stroke="#378add" stroke-width="0.5"/>
+    <text x="120" y="334" text-anchor="middle" style="font-size:14px;font-weight:500;">/dashboard</text>
+    <text x="120" y="350" text-anchor="middle" style="font-size:12px;fill:#666;">DashboardPage</text>
+
+    <!-- Sub routes -->
+    <rect x="220" y="312" width="120" height="32" rx="6" fill="#f5f5f3" stroke="#888" stroke-width="0.5"/>
+    <text x="280" y="333" text-anchor="middle" style="font-size:13px;">library</text>
+
+    <rect x="220" y="352" width="120" height="32" rx="6" fill="#f5f5f3" stroke="#888" stroke-width="0.5"/>
+    <text x="280" y="373" text-anchor="middle" style="font-size:13px;">my-library</text>
+
+    <rect x="220" y="392" width="120" height="32" rx="6" fill="#f5f5f3" stroke="#888" stroke-width="0.5"/>
+    <text x="280" y="413" text-anchor="middle" style="font-size:13px;">materials</text>
+
+    <rect x="350" y="312" width="120" height="32" rx="6" fill="#f5f5f3" stroke="#888" stroke-width="0.5"/>
+    <text x="410" y="333" text-anchor="middle" style="font-size:13px;">ai-chat</text>
+
+    <rect x="350" y="352" width="120" height="32" rx="6" fill="#f5f5f3" stroke="#888" stroke-width="0.5"/>
+    <text x="410" y="373" text-anchor="middle" style="font-size:13px;">research</text>
+
+    <rect x="350" y="392" width="120" height="32" rx="6" fill="#f5f5f3" stroke="#888" stroke-width="0.5"/>
+    <text x="410" y="413" text-anchor="middle" style="font-size:13px;">settings</text>
+
+    <!-- Admin Section -->
+    <text x="540" y="30" style="font-size:16px;font-weight:500;">Admin Route</text>
+
+    <rect x="500" y="40" width="140" height="44" rx="8" fill="#faceb7" stroke="#d85a30" stroke-width="0.5"/>
+    <text x="570" y="62" text-anchor="middle" style="font-size:14px;font-weight:500;">/admin</text>
+    <text x="570" y="78" text-anchor="middle" style="font-size:12px;fill:#666;">AdminPage</text>
+
+    <rect x="500" y="100" width="140" height="56" rx="8" fill="#faeeda" stroke="#ba7517" stroke-width="0.5"/>
+    <text x="570" y="122" text-anchor="middle" style="font-size:14px;font-weight:500;">RequireAdmin</text>
+    <text x="570" y="138" text-anchor="middle" style="font-size:12px;fill:#666;">Check role=admin</text>
+    <text x="570" y="154" text-anchor="middle" style="font-size:12px;fill:#666;">from localStorage</text>
+
+    <!-- Legend -->
+    <rect x="500" y="180" width="100" height="24" rx="4" fill="#e1f5ee" stroke="#1d9e75" stroke-width="0.5"/>
+    <text x="550" y="196" text-anchor="middle" style="font-size:11px;">Public</text>
+
+    <rect x="500" y="212" width="100" height="24" rx="4" fill="#e6f1fb" stroke="#378add" stroke-width="0.5"/>
+    <text x="550" y="228" text-anchor="middle" style="font-size:11px;">Protected</text>
+
+    <rect x="500" y="244" width="100" height="24" rx="4" fill="#faceb7" stroke="#d85a30" stroke-width="0.5"/>
+    <text x="550" y="260" text-anchor="middle" style="font-size:11px;">Admin</text>
+
+    <rect x="500" y="276" width="100" height="24" rx="4" fill="#faeeda" stroke="#ba7517" stroke-width="0.5"/>
+    <text x="550" y="292" text-anchor="middle" style="font-size:11px;">Guard</text>
+  </svg>
+</div>
+
+<!-- Section 2: Login Flow -->
+<div class="card">
+  <h2>2. Login Flow — Ideal State</h2>
+  <div class="grid-3" style="margin-top:1rem;">
+    <div class="box c-gray">
+      <div class="box-title">Step 1: Enter Credentials</div>
+      <div class="box-sub">User enters admin / 123456</div>
+    </div>
+    <div class="box c-gray">
+      <div class="box-title">Step 2: Mock Auth</div>
+      <div class="box-sub">authService.login() returns success</div>
+    </div>
+    <div class="box c-gray">
+      <div class="box-title">Step 3: Sync State</div>
+      <div class="box-sub">Update Zustand + localStorage</div>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem;padding:1rem;background:#f5f5f3;border-radius:8px;">
+    <h3 style="margin-bottom:8px;">State After Login:</h3>
+    <div class="grid-2">
+      <div>
+        <p style="font-size:13px;color:#666;">Zustand Store (useAuthStore)</p>
+        <code style="display:block;padding:8px;background:white;border-radius:4px;font-size:12px;line-height:1.5;">
+          token: "mock-jwt-token-xxx"<br/>
+          user: { id: "admin-fixed", role: "admin", ... }<br/>
+          isAuthenticated: true<br/>
+          isLoading: false
+        </code>
+      </div>
+      <div>
+        <p style="font-size:13px;color:#666;">localStorage</p>
+        <code style="display:block;padding:8px;background:white;border-radius:4px;font-size:12px;line-height:1.5;">
+          joan_auth_token: "mock-jwt-token-xxx"<br/>
+          joan_academic_user: { id: "admin-fixed", role: "admin", ... }
+        </code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Section 3: Page States -->
+<div class="card">
+  <h2>3. Page Ideal States (After Login)</h2>
+
+  <!-- Public Pages -->
+  <h3 style="margin-top:1rem;">Public Pages (No Login Required)</h3>
+  <div class="grid-3" style="margin-top:0.5rem;">
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e1f5ee;color:#0f6e56;">L</div>
+        <div>
+          <div class="page-title">AuthPage</div>
+          <div class="page-desc">/login — Login & Register</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+          <p style="font-size:11px;color:#666;">Login Form</p>
+          <p style="font-size:12px;font-weight:500;">Username: admin</p>
+          <p style="font-size:12px;font-weight:500;">Password: 123456</p>
+          <p style="font-size:11px;color:#0f6e56;margin-top:4px;">Auto-filled</p>
+        </div>
+        <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+          <p style="font-size:11px;color:#666;">Register Tab</p>
+          <p style="font-size:12px;">Username, Email, Password</p>
+          <p style="font-size:11px;color:#666;">Form validation</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e1f5ee;color:#0f6e56;">G</div>
+        <div>
+          <div class="page-title">GalleryPage</div>
+          <div class="page-desc">/gallery — Academic Square</div>
+        </div>
+      </div>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <p style="font-size:11px;color:#666;">Public Papers Grid</p>
+        <p style="font-size:12px;">Featured papers from all users</p>
+        <p style="font-size:11px;color:#666;margin-top:4px;">3-6 paper cards shown</p>
+      </div>
+    </div>
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e1f5ee;color:#0f6e56;">U</div>
+        <div>
+          <div class="page-title">PublicProfilePage</div>
+          <div class="page-desc">/u/:username — User Space</div>
+        </div>
+      </div>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <p style="font-size:11px;color:#666;">User Public Profile</p>
+        <p style="font-size:12px;">Avatar, Bio, Public Papers</p>
+        <p style="font-size:11px;color:#666;margin-top:4px;">Read-only view</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Protected Pages -->
+  <h3 style="margin-top:1.5rem;">Protected Pages (Login Required)</h3>
+  <div class="grid-2" style="margin-top:0.5rem;">
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e6f1fb;color:#0c447c;">D</div>
+        <div>
+          <div class="page-title">DashboardPage</div>
+          <div class="page-desc">/dashboard — Main Dashboard</div>
+        </div>
+      </div>
+      <div class="grid-2" style="gap:8px;">
+        <div class="metric">
+          <div class="metric-label">Papers</div>
+          <div class="metric-value" style="color:#0c447c;">12</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Projects</div>
+          <div class="metric-value" style="color:#0c447c;">3</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Reading</div>
+          <div class="metric-value" style="color:#0c447c;">5</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Spaces</div>
+          <div class="metric-value" style="color:#0c447c;">1</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e6f1fb;color:#0c447c;">L</div>
+        <div>
+          <div class="page-title">LibraryPage</div>
+          <div class="page-desc">/dashboard/library — Paper Library</div>
+        </div>
+      </div>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <p style="font-size:11px;color:#666;">Paper List with Filters</p>
+        <p style="font-size:12px;">Search bar, category filter, 10+ papers</p>
+        <p style="font-size:11px;color:#0f6e56;margin-top:4px;">Mock data loaded</p>
+      </div>
+    </div>
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e6f1fb;color:#0c447c;">M</div>
+        <div>
+          <div class="page-title">MaterialsPage</div>
+          <div class="page-desc">/dashboard/materials — Materials</div>
+        </div>
+      </div>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <p style="font-size:11px;color:#666;">Study Materials</p>
+        <p style="font-size:12px;">Notes, Highlights, 5+ materials</p>
+        <p style="font-size:11px;color:#0f6e56;margin-top:4px;">CRUD operations</p>
+      </div>
+    </div>
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e6f1fb;color:#0c447c;">AI</div>
+        <div>
+          <div class="page-title">AIChatPage</div>
+          <div class="page-desc">/dashboard/ai-chat — AI Chat</div>
+        </div>
+      </div>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <p style="font-size:11px;color:#666;">SSE Streaming Chat</p>
+        <p style="font-size:12px;">Chat with AI about papers</p>
+        <p style="font-size:11px;color:#0f6e56;margin-top:4px;">Real-time response</p>
+      </div>
+    </div>
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e6f1fb;color:#0c447c;">R</div>
+        <div>
+          <div class="page-title">ResearchPage</div>
+          <div class="page-desc">/dashboard/research — Projects</div>
+        </div>
+      </div>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <p style="font-size:11px;color:#666;">Research Projects</p>
+        <p style="font-size:12px;">Project cards, progress tracking</p>
+        <p style="font-size:11px;color:#0f6e56;margin-top:4px;">3 projects active</p>
+      </div>
+    </div>
+
+    <div class="page-preview">
+      <div class="page-header">
+        <div class="page-icon" style="background:#e6f1fb;color:#0c447c;">S</div>
+        <div>
+          <div class="page-title">SettingsPage</div>
+          <div class="page-desc">/dashboard/settings — Settings</div>
+        </div>
+      </div>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <p style="font-size:11px;color:#666;">User Preferences</p>
+        <p style="font-size:12px;">Theme, Language, Notifications</p>
+        <p style="font-size:11px;color:#0f6e56;margin-top:4px;">Theme toggle works</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Page -->
+  <h3 style="margin-top:1.5rem;">Admin Page (role=admin Required)</h3>
+  <div class="page-preview" style="margin-top:0.5rem;">
+    <div class="page-header">
+      <div class="page-icon" style="background:#faceb7;color:#712b13;">A</div>
+      <div>
+        <div class="page-title">AdminPage</div>
+        <div class="page-desc">/admin — Admin Dashboard</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="gap:12px;margin-top:12px;">
+      <div>
+        <p style="font-size:13px;font-weight:500;margin-bottom:8px;">Stats Overview</p>
+        <div class="grid-2" style="gap:8px;">
+          <div class="metric">
+            <div class="metric-label">Users</div>
+            <div class="metric-value" style="color:#0c447c;">2</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Papers</div>
+            <div class="metric-value" style="color:#0c447c;">12</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Projects</div>
+            <div class="metric-value" style="color:#0c447c;">3</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">KV Usage</div>
+            <div class="metric-value" style="font-size:18px;color:#0c447c;">2.4MB</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p style="font-size:13px;font-weight:500;margin-bottom:8px;">System Health</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;justify-content:space-between;padding:8px;background:#f5f5f3;border-radius:6px;">
+            <span style="font-size:13px;">API Service</span>
+            <span style="font-size:12px;color:#0f6e56;">Normal</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px;background:#f5f5f3;border-radius:6px;">
+            <span style="font-size:13px;">KV Storage</span>
+            <span style="font-size:12px;color:#0f6e56;">Normal</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px;background:#f5f5f3;border-radius:6px;">
+            <span style="font-size:13px;">Cloud Functions</span>
+            <span style="font-size:12px;color:#0f6e56;">Normal</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <p style="font-size:13px;font-weight:500;margin-bottom:8px;">User Management Tab</p>
+      <div style="padding:8px;background:#f5f5f3;border-radius:6px;">
+        <div style="display:flex;justify-content:space-between;padding:8px;background:white;border-radius:4px;margin-bottom:4px;">
+          <div>
+            <p style="font-size:13px;font-weight:500;">admin</p>
+            <p style="font-size:11px;color:#666;">@admin</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span style="font-size:11px;background:#e6f1fb;color:#0c447c;padding:2px 8px;border-radius:4px;">Admin</span>
+            <span style="font-size:11px;background:#e1f5ee;color:#0f6e56;padding:2px 8px;border-radius:4px;">Active</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Section 4: Permission Matrix -->
+<div class="card">
+  <h2>4. Permission Matrix</h2>
+  <div style="margin-top:1rem;overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:#f5f5f3;">
+          <th style="padding:8px;text-align:left;font-weight:500;border:0.5px solid rgba(0,0,0,0.1);">Page</th>
+          <th style="padding:8px;text-align:center;font-weight:500;border:0.5px solid rgba(0,0,0,0.1);">Public</th>
+          <th style="padding:8px;text-align:center;font-weight:500;border:0.5px solid rgba(0,0,0,0.1);">User</th>
+          <th style="padding:8px;text-align:center;font-weight:500;border:0.5px solid rgba(0,0,0,0.1);">Admin</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1);">/login</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#0f6e56;">Yes</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#ba7517;">Redirect</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#ba7517;">Redirect</td>
+        </tr>
+        <tr style="background:#fafafa;">
+          <td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1);">/gallery</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#0f6e56;">Yes</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#0f6e56;">Yes</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#0f6e56;">Yes</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1);">/dashboard/*</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#a32d2d;">No</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#0f6e56;">Yes</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#0f6e56;">Yes</td>
+        </tr>
+        <tr style="background:#fafafa;">
+          <td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1);">/admin</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#a32d2d;">No</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#a32d2d;">No</td>
+          <td style="padding:8px;text-align:center;border:0.5px solid rgba(0,0,0,0.1);color:#0f6e56;">Yes</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Section 5: File Structure -->
+<div class="card">
+  <h2>5. Key Files for Frontend States</h2>
+  <div class="grid-2" style="margin-top:1rem;gap:12px;">
+    <div>
+      <p style="font-size:13px;font-weight:500;margin-bottom:8px;">Auth & State</p>
+      <code style="display:block;padding:8px;background:#f5f5f3;border-radius:6px;font-size:12px;line-height:1.8;">
+        src/store/authStore.ts<br/>
+        src/pages/AuthPage.tsx<br/>
+        src/services/authService.ts<br/>
+        src/components/common/RequireAuth.tsx<br/>
+        src/components/common/RequireAdmin.tsx
+      </code>
+    </div>
+    <div>
+      <p style="font-size:13px;font-weight:500;margin-bottom:8px;">Pages</p>
+      <code style="display:block;padding:8px;background:#f5f5f3;border-radius:6px;font-size:12px;line-height:1.8;">
+        src/pages/AdminPage.tsx<br/>
+        src/pages/DashboardPage.tsx<br/>
+        src/pages/LibraryPage.tsx<br/>
+        src/pages/AIChatPage.tsx
+      </code>
+    </div>
+    <div>
+      <p style="font-size:13px;font-weight:500;margin-bottom:8px;">API Layer</p>
+      <code style="display:block;padding:8px;background:#f5f5f3;border-radius:6px;font-size:12px;line-height:1.8;">
+        src/lib/api.ts (main, with Mock)<br/>
+        src/services/api.ts (auth, with Mock)<br/>
+        VITE_MOCK_MODE=true/false
+      </code>
+    </div>
+    <div>
+      <p style="font-size:13px;font-weight:500;margin-bottom:8px;">Backend (EdgeOne)</p>
+      <code style="display:block;padding:8px;background:#f5f5f3;border-radius:6px;font-size:12px;line-height:1.8;">
+        cloud-functions/api/[[default]].js<br/>
+        functions/index.js (Edge Functions)<br/>
+        pages.config.json
+      </code>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

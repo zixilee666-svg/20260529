@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "./dist",
+  "routes": [
+    {
+      "path": "/api/*",
+      "target": "./edge-functions"
+    },
+    {
+      "path": "/*",
+      "target": "./dist"
+    }
+  ],
+  "edgeFunctions": {
+    "routes": [
+      {
+        "src": "/api/(.*)",
+        "dest": "/api/index.js"
+      }
+    ]
+  },
+  "envVariables": {
+    "JWT_SECRET": "your-jwt-secret-key-min-32-chars",
+    "KV_STORAGE_ID": "your-kv-storage-id",
+    "CLOUD_FUNCTION_TOKEN": "your-cloud-function-token"
+  },
+  "site": {
+    "icp": {
+      "number": "粤ICP备2026052655号-1",
+      "link": "https://beian.miit.gov.cn/"
+    },
+    "security": {
+      "police": {
+        "number": "",
+        "link": "https://beian.mps.gov.cn/#/"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "edgeone-pages-deploy": {
+      "source": "TencentEdgeOne/edgeone-pages-skills",
+      "sourceType": "github",
+      "skillPath": "skills/edgeone-pages-deploy/SKILL.md",
+      "computedHash": "6297110046e64f72db44f4eee3a6347930e95d4a3610000e4b6a2eb968b29f7f"
+    },
+    "edgeone-pages-dev": {
+      "source": "TencentEdgeOne/edgeone-pages-skills",
+      "sourceType": "github",
+      "skillPath": "skills/edgeone-pages-dev/SKILL.md",
+      "computedHash": "14ab9df0d5845da1ce0b7954441595f9abe824ab055a15bf13625838a79d1a73"
+    }
+  }
+}

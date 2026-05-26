@@ -1,0 +1,82 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  darkMode: 'class',
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+          50: '#f0f2f5',
+          100: '#d9dfe8',
+          200: '#b3bfce',
+          300: '#8d9fb4',
+          400: '#677f9a',
+          500: '#3d5a80',
+          600: '#2f4666',
+          700: '#22334d',
+          800: '#162233',
+          900: '#0b111a',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+          50: '#fdf9f0',
+          100: '#f9ecd0',
+          200: '#f3d9a1',
+          300: '#edc672',
+          400: '#e7b343',
+          500: '#c9a04d',
+          600: '#a6833d',
+          700: '#83662e',
+          800: '#5f4a22',
+          900: '#3c2e16',
+        },
+        ivory: {
+          50: '#fffffe',
+          100: '#fffdf5',
+          200: '#fffbeb',
+          300: '#f5f0e1',
+        },
+        success: '#5b8c5a',
+        warning: '#c9a04d',
+        error: '#a85c5c',
+      },
+      fontFamily: {
+        serif: ['Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'serif'],
+        sans: ['Inter Variable', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Playfair Display', 'Georgia', 'serif'],
+      },
+      borderRadius: {
+        sm: '6px',
+        md: '10px',
+        lg: '14px',
+        xl: '18px',
+      },
+      boxShadow: {
+        card: '0 2px 12px rgba(11, 17, 26, 0.06)',
+        'card-hover': '0 8px 30px rgba(11, 17, 26, 0.10)',
+        glow: '0 0 20px rgba(61, 90, 128, 0.15)',
+      },
+    },
+  },
+  plugins: [],
+}

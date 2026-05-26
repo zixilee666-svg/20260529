@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>All Pages Preview — Joan's Academic Hub</title>
+  <style>
+    * { margin:0; padding:0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #111;
+      color: white;
+      padding: 1rem;
+    }
+    h1 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
+    p { font-size: 12px; color: #888; margin-bottom: 1rem; }
+    .info {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 1rem;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .info strong { color: #3b82f6; }
+
+    /* Grid for iframes */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .preview-box {
+      background: #1a1a1a;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #222;
+      border-bottom: 1px solid #333;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .dot-red { background: #ff5f57; }
+    .dot-yellow { background: #febc2e; }
+    .dot-green { background: #28c840; }
+    .preview-title {
+      font-size: 11px;
+      color: #888;
+      margin-left: 8px;
+    }
+    .preview-iframe {
+      width: 100%;
+      height: 280px;
+      border: none;
+      display: block;
+    }
+    .preview-label {
+      font-size: 11px;
+      color: #666;
+      padding: 6px 12px;
+      border-top: 1px solid #333;
+      text-align: center;
+    }
+    .preview-label span {
+      color: #3b82f6;
+    }
+
+    @media (max-width: 1200px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Joan's Academic Hub — All Pages Preview</h1>
+<p>Real frontend rendered via Vite dev server</p>
+
+<div class="info">
+  <strong>状态：</strong> Vite dev server running on <strong>http://localhost:5173</strong><br/>
+  <strong>模式：</strong> Mock Mode (VITE_MOCK_MODE=true) — 所有数据来自前端 Mock，无后端依赖<br/>
+  <strong>登录：</strong> 使用 <strong>admin / 123456</strong> 登录后可访问受保护页面<br/>
+  <strong>提示：</strong> 点击下方 iframe 切换到不同页面，或打开 <a href="http://localhost:5173" target="_blank" style="color:#3b82f6;">新窗口</a> 完整体验
+</div>
+
+<div class="grid">
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/login — 登录页</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/login" title="Login Page"></iframe>
+    <div class="preview-label"><span>PUBLIC</span> — 公开访问，无需登录</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/gallery — 学术广场</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/" title="Gallery Page"></iframe>
+    <div class="preview-label"><span>PUBLIC</span> — 公开访问，展示公开论文</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/u/:username — 用户空间</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/u/admin" title="Public Profile"></iframe>
+    <div class="preview-label"><span>PUBLIC</span> — 公开用户资料页</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/dashboard — 仪表盘</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/dashboard" title="Dashboard"></iframe>
+    <div class="preview-label"><span>PROTECTED</span> — 需要登录（admin/123456）</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/dashboard/library — 文献库</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/dashboard/library" title="Library"></iframe>
+    <div class="preview-label"><span>PROTECTED</span> — 登录后访问</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/dashboard/research — 研究</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/dashboard/research" title="Research"></iframe>
+    <div class="preview-label"><span>PROTECTED</span> — 登录后访问</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/dashboard/ai-chat — AI 聊天</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/dashboard/ai-chat" title="AI Chat"></iframe>
+    <div class="preview-label"><span>PROTECTED</span> — 登录后访问</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/dashboard/settings — 设置</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/dashboard/settings" title="Settings"></iframe>
+    <div class="preview-label"><span>PROTECTED</span> — 登录后访问</div>
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-header">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="preview-title">/admin — 管理后台</div>
+    </div>
+    <iframe class="preview-iframe" src="http://localhost:5173/#/admin" title="Admin"></iframe>
+    <div class="preview-label" style="background:#712b13;"><span style="color:#faceb7;">ADMIN</span> — 仅管理员（role=admin）</div>
+  </div>
+
+</div>
+
+<div class="info" style="margin-top:1rem;">
+  <strong>各页面说明：</strong><br/>
+  1. <strong>/login</strong> — 登录/注册页，默认账号 admin/123456<br/>
+  2. <strong>/gallery</strong> — 学术广场，公开论文展示<br/>
+  3. <strong>/u/:username</strong> — 用户公开空间，可查看他人公开资料<br/>
+  4. <strong>/dashboard</strong> — 主仪表盘，统计数据和快捷入口<br/>
+  5. <strong>/dashboard/library</strong> — 文献库，支持搜索、筛选、导入<br/>
+  6. <strong>/dashboard/research</strong> — 研究项目管理<br/>
+  7. <strong>/dashboard/ai-chat</strong> — AI 助手聊天（SSE 流式）<br/>
+  8. <strong>/dashboard/settings</strong> — 用户设置（主题、语言、通知）<br/>
+  9. <strong>/admin</strong> — 管理后台，用户管理、系统监控
+</div>
+
+</body>
+</html>
