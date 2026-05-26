@@ -170,6 +170,8 @@ async function callOpenAICompatibleApi(baseUrl, apiKey, model, messages, { strea
   // 移除 baseUrl 末尾可能已有的 /chat/completions，避免重复拼接
   const base = baseUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '');
   const url = base + '/chat/completions';
+  const logUrl = url.replace(/\/\/.*@/, '//***@').replace(/(\/\/[^/]+)\/.*/, '$1/***');
+  console.error('[callOpenAICompatibleApi] PUT', logUrl, 'model:', model, 'stream:', stream, 'timeout:', timeout);
 
   // AbortController 超时保护（Edge Function 约 30s 硬限制，留 2s 余量）
   const controller = new AbortController();
@@ -210,8 +212,9 @@ async function callOpenAICompatibleApi(baseUrl, apiKey, model, messages, { strea
 
 // Parse paper metadata using any OpenAI-compatible API
 async function handleParsePaper(request) {
+  let body;
   try {
-    const body = await request.json();
+    body = await request.json();
     const { text, modelConfig } = body;
     const { baseUrl, apiKey, model } = modelConfig || {};
 
@@ -226,6 +229,10 @@ async function handleParsePaper(request) {
 - venue: string, volume: string, issue: string, pages: string
 - doi: string, url: string, abstract: string, keywords: string[]
 无法提取用""、[]或null。只返回JSON。`;
+
+    // 脱敏打印 baseUrl（仅打印域名，不打印 apiKey）
+    const logUrl = baseUrl ? baseUrl.replace(/\/\/.*@/, '//***@').replace(/(\/\/.*)\//, '$1/***') : 'undefined';
+    console.error('[ParsePaper] Calling AI API:', logUrl, 'model:', model || 'default');
 
     const res = await callOpenAICompatibleApi(baseUrl, apiKey, model || 'moonshot-v1-32k', [
       { role: 'system', content: systemPrompt },
@@ -348,8 +355,20 @@ async function handleParsePaper(request) {
       references: [],
     }, 'Paper parsed successfully', request);
   } catch (e) {
-    console.error('[ParsePaper] Error:', e);
-    return apiError('Failed to parse paper: ' + e.message, 502, 'AI_PARSE_ERROR', request);
+    const errInfo = {
+      name: e.name || 'Unknown',
+      message: e.message || 'No message',
+      stack: (e.stack || '').slice(0, 500),
+      baseUrl: (body?.modelConfig?.baseUrl || '').replace(/https?:\/\/[^/]+/, '***'),
+    };
+    console.error('[ParsePaper] Error:', JSON.stringify(errInfo, null, 2));
+    return apiError(
+      `Failed to parse paper: ${e.name}: ${e.message}`,
+      502,
+      'AI_PARSE_ERROR',
+      request,
+      { debug: errInfo }
+    );
   }
 }
 
@@ -456,8 +475,8 @@ function success(data, message = 'Success', request) {
   return json({ success: true, data, message }, 200, request);
 }
 
-function apiError(message, status = 400, code = 'ERROR', request) {
-  return json({ success: false, error: message, code }, status, request);
+function apiError(message, status = 400, code = 'ERROR', request, extra = {}) {
+  return json({ success: false, error: message, code, ...extra }, status, request);
 }
 
 function unauthorized(request) {
