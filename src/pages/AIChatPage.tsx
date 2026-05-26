@@ -95,11 +95,14 @@ export default function AIChatPage() {
       try {
         const conv = conversationsRef.current.find(c => c.id === convId);
         if (!conv || messagesRef.current.length === 0) return;
-        api.saveConversation(convId, {
+        const payload = {
           ...conv,
           messages: messagesRef.current,
           updatedAt: new Date().toISOString(),
-        }).catch(e => console.error('[AIChat] Save failed:', e));
+        };
+        const bodySize = JSON.stringify(payload).length;
+        console.log(`[AIChat] Saving conv ${convId}: ${messagesRef.current.length} msgs, ${bodySize} bytes`);
+        api.saveConversation(convId, payload).catch(e => console.error('[AIChat] Save failed:', e));
       } catch (e) {
         console.error('[AIChat] Persist error:', e);
       }

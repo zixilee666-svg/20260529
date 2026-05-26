@@ -3156,31 +3156,56 @@ export async function onRequest(context) {
         // PUT /api/ai/conversations/:id — 保存/更新对话
         if (request.method === 'PUT' && segments[2]) {
           try {
-            // 先读取 raw text 以便排查问题
-            const rawText = await request.text();
-            console.error('[AI PUT] Body length:', rawText ? rawText.length : 0, 'Bytes');
-            if (!rawText || rawText.trim().length === 0) {
-              return apiError('Empty request body', 400, 'EMPTY_BODY', request);
-            }
+            // 使用 request.json() 而非 request.text()（与 handleLogin/handleAiChat 一致）
+            // EdgeOne V8 isolate 中 request.text() 在某些情况下行为异常
             let body;
             try {
-              body = JSON.parse(rawText);
-            } catch (parseErr) {
-              console.error('[AI PUT] JSON parse error:', parseErr.message);
-              console.error('[AI PUT] Raw body (first 500 chars):', rawText.slice(0, 500));
-              return apiError('Invalid JSON: ' + parseErr.message, 400, 'INVALID_JSON', request);
+              body = await request.json();
+            } catch (jsonErr) {
+              console.error('[AI PUT] request.json() failed:', jsonErr.message);
+              // 回退：尝试手动 text + parse
+              try {
+                const rawText = await request.text();
+                console.error('[AI PUT] Fallback body length:', rawText ? rawText.length : 0);
+                if (!rawText || rawText.trim().length === 0) {
+                  return apiError('Empty request body', 400, 'EMPTY_BODY', request);
+                }
+                body = JSON.parse(rawText);
+              } catch (fallbackErr) {
+                console.error('[AI PUT] Fallback also failed:', fallbackErr.message);
+                return apiError('Cannot parse request body: ' + fallbackErr.message, 400, 'INVALID_BODY', request);
+              }
             }
+
+            if (!body || typeof body !== 'object') {
+              return apiError('Invalid body type: ' + typeof body, 400, 'INVALID_BODY', request);
+            }
+
             const convData = {
               ...body,
               userId,
               id: segments[2],
               updatedAt: new Date().toISOString(),
             };
-            await saveConversation(userId, segments[2], convData);
+
+            // 分步 try-catch，精确定位错误来源
+            try {
+              await saveConversation(userId, segments[2], convData);
+            } catch (saveErr) {
+              console.error('[AI PUT] saveConversation failed:', saveErr.message);
+              // 检查是否是 JSON.stringify 问题
+              try {
+                JSON.stringify(convData);
+              } catch (stringifyErr) {
+                return apiError('Data serialization error: ' + stringifyErr.message, 400, 'SERIALIZE_ERROR', request);
+              }
+              return apiError('Storage error: ' + saveErr.message, 500, 'STORAGE_ERROR', request);
+            }
+
             return success(convData, 'Conversation saved', request);
           } catch (e) {
-            console.error('[AI PUT] Unhandled error:', e.message || e);
-            return apiError('Invalid request body', 400, 'INVALID_BODY', request);
+            console.error('[AI PUT] Outer catch - unhandled:', e.message || e, '| stack:', e.stack || 'none');
+            return apiError('Unexpected error: ' + (e.message || 'unknown'), 500, 'AI_PUT_ERROR', request);
           }
         }
 
