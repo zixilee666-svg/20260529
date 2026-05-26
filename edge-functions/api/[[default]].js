@@ -219,32 +219,18 @@ async function handleParsePaper(request) {
       return apiError('text, apiKey and baseUrl are required', 400, 'VALIDATION_ERROR', request);
     }
 
-    const systemPrompt = `你是学术文献元数据提取专家。从文献文本中提取结构化信息，只返回纯JSON（不要markdown代码块）。
-
-字段及类型：
-- title: string（保留原标题大小写）
-- authors: string[]（FirstName LastName，中文保留原名）
-- year: number（4位数字）
-- month: number|null（1-12）
-- venue: string（期刊/会议全称）
-- volume: string、issue: string、pages: string、doi: string、url: string、abstract: string
-- keywords: string[]（3-10个）
-- bibtex: string（@article格式）、ieee: string、gb7714: string
-- references: {title, authors, year, venue}[]（无则为空数组）
-
-提取规则：
-1. DOI: 搜索"10."开头字符串，排除"DOI:"前缀
-2. 年份: 4位数字，优先标题附近，排除下载/审稿日期
-3. 作者: 搜索"Author(s)","By"后的姓名列表
-4. 期刊: 使用官方全称，非缩写
-5. 无法提取用""、[]或null，禁止编造
-
-只返回JSON，无额外文字。`;
+    // 【优化】AI 只提取核心元数据，引用格式由服务端算法生成
+    // 原因：bibtex/ieee/gb7714/references 占输出 tokens 的 60%+，是超时的主因
+    const systemPrompt = `从文献文本提取元数据，只返回纯JSON。字段：
+- title: string, authors: string[], year: number, month: number|null
+- venue: string, volume: string, issue: string, pages: string
+- doi: string, url: string, abstract: string, keywords: string[]
+无法提取用""、[]或null。只返回JSON。`;
 
     const res = await callOpenAICompatibleApi(baseUrl, apiKey, model || 'moonshot-v1-32k', [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: `解析以下文献文本：\n\n${text.slice(0, 15000)}` },
-    ], { stream: false, temperature: 0.1, maxTokens: 4096, timeout: 25000 });
+      { role: 'user', content: text.slice(0, 6000) },
+    ], { stream: false, temperature: 0.1, maxTokens: 1024, timeout: 18000 });
 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content || '';
@@ -252,15 +238,12 @@ async function handleParsePaper(request) {
     // Extract JSON from response
     let parsed;
     try {
-      // Try direct parse first
       parsed = JSON.parse(content);
     } catch {
-      // Try extracting JSON from markdown code block
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         parsed = JSON.parse(jsonMatch[1]);
       } else {
-        // Try finding JSON between first { and last }
         const braceMatch = content.match(/\{[\s\S]*\}/);
         if (braceMatch) {
           parsed = JSON.parse(braceMatch[0]);
@@ -276,36 +259,93 @@ async function handleParsePaper(request) {
       authors = parsed.authors.map(a => typeof a === 'string' ? a : (a.name || '')).filter(Boolean);
     }
 
-    // Normalize references
-    let references = [];
-    if (Array.isArray(parsed.references)) {
-      references = parsed.references.map(r => ({
-        title: r.title || '',
-        authors: Array.isArray(r.authors) ? r.authors.map(a => typeof a === 'string' ? a : (a.name || '')).filter(Boolean) : [],
-        year: typeof r.year === 'number' ? r.year : (parseInt(r.year) || 0),
-        venue: r.venue || '',
-      }));
-    }
+    // 服务端算法生成三种引用格式（确定性，零延迟）
+    const title = parsed.title || '';
+    const year = typeof parsed.year === 'number' ? parsed.year : (parseInt(parsed.year) || new Date().getFullYear());
+    const month = parsed.month !== undefined && parsed.month !== null ? (typeof parsed.month === 'number' ? parsed.month : parseInt(parsed.month) || null) : null;
+    const venue = parsed.venue || '';
+    const volume = parsed.volume !== undefined ? String(parsed.volume) : '';
+    const issue = parsed.issue !== undefined ? String(parsed.issue) : '';
+    const pages = parsed.pages || '';
+    const doi = parsed.doi || '';
+    const keywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
+
+    // 生成引用 citation key
+    const firstAuthor = authors[0] || 'Unknown';
+    const lastName = firstAuthor.split(' ').pop() || firstAuthor;
+    const citeKey = `${lastName}${year}${title.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`;
+
+    // BibTeX
+    const bibtex = [
+      `@article{${citeKey},`,
+      `  title={${title}},`,
+      authors.length > 0 ? `  author={${authors.join(' and ')}},` : '',
+      venue ? `  journal={${venue}},` : '',
+      `  year={${year}},`,
+      volume ? `  volume={${volume}},` : '',
+      issue ? `  number={${issue}},` : '',
+      pages ? `  pages={${pages}},` : '',
+      doi ? `  doi={${doi}}` : '',
+      '}',
+    ].filter(Boolean).join('\n');
+
+    // IEEE
+    const monthNames = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
+    const monthStr = month && month >= 1 && month <= 12 ? monthNames[month - 1] + ' ' : '';
+    const ieeeAuthors = authors.length === 1 ? authors[0]
+      : authors.length === 2 ? `${authors[0]} and ${authors[1]}`
+      : authors.length > 2 ? `${authors[0]} et al.`
+      : '';
+    const ieee = [
+      ieeeAuthors ? `${ieeeAuthors},` : '',
+      title ? `"${title},"` : '',
+      venue ? ` ${venue},` : '',
+      volume ? ` vol. ${volume},` : '',
+      issue ? ` no. ${issue},` : '',
+      pages ? ` pp. ${pages},` : '',
+      `${monthStr}${year}.`,
+      doi ? ` doi: ${doi}.` : '.',
+    ].filter(Boolean).join('');
+
+    // GB/T 7714-2015
+    const isChinese = /[\u4e00-\u9fff]/.test(title) || authors.some(a => /[\u4e00-\u9fff]/.test(a));
+    const gb7714 = isChinese
+      ? [
+          authors.length > 0 ? `${authors.join('; ')}. ` : '',
+          title ? `${title}[J]. ` : '',
+          venue ? `${venue}, ` : '',
+          `${year}`,
+          volume ? `, ${volume}` : '',
+          issue ? `(${issue})` : '',
+          pages ? `: ${pages}` : '',
+          doi ? ` DOI: ${doi}.` : '.',
+        ].filter(Boolean).join('')
+      : [
+          authors.length > 0 ? `${authors.join(', ')}. ` : '',
+          title ? `${title}[J]. ` : '',
+          venue ? `${venue}, ` : '',
+          `${year}`,
+          volume ? `, ${volume}` : '',
+          issue ? `(${issue})` : '',
+          pages ? `: ${pages}` : '',
+          doi ? ` DOI: ${doi}.` : '.',
+        ].filter(Boolean).join('');
 
     return success({
-      title: parsed.title || '',
-      authors: authors,
-      year: typeof parsed.year === 'number' ? parsed.year : (parseInt(parsed.year) || new Date().getFullYear()),
-      month: parsed.month !== undefined && parsed.month !== null ? (typeof parsed.month === 'number' ? parsed.month : parseInt(parsed.month) || null) : null,
-      venue: parsed.venue || '',
-      volume: parsed.volume !== undefined ? String(parsed.volume) : '',
-      issue: parsed.issue !== undefined ? String(parsed.issue) : '',
-      pages: parsed.pages || '',
-      doi: parsed.doi || '',
+      title,
+      authors,
+      year,
+      month,
+      venue,
+      volume,
+      issue,
+      pages,
+      doi,
       url: parsed.url || '',
       abstract: parsed.abstract || '',
-      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
-      citations: {
-        bibtex: parsed.bibtex || '',
-        ieee: parsed.ieee || '',
-        gb7714: parsed.gb7714 || '',
-      },
-      references: references,
+      keywords,
+      citations: { bibtex, ieee, gb7714 },
+      references: [],
     }, 'Paper parsed successfully', request);
   } catch (e) {
     console.error('[ParsePaper] Error:', e);
