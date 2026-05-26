@@ -39,8 +39,10 @@ async function extractTextFromPDF(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
+  // Only extract first 3 pages (title, authors, abstract, intro) — full paper text is too noisy for AI parsing
+  const maxPages = Math.min(pdf.numPages, 3);
   let fullText = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
+  for (let i = 1; i <= maxPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
     const pageText = textContent.items
@@ -49,8 +51,23 @@ async function extractTextFromPDF(file: File): Promise<string> {
     fullText += pageText + '\n';
   }
 
-  if (fullText.length > 50000) {
-    fullText = fullText.substring(0, 50000) + '\n\n[内容已截断，原始文件过大]';
+  // Also try to get PDF metadata (title, author) as a header
+  try {
+    const meta = await pdf.getMetadata();
+    const info = meta.info as any;
+    if (info?.Title || info?.Author) {
+      const metaHeader = [
+        info.Title ? `Title: ${info.Title}` : '',
+        info.Author ? `Authors: ${info.Author}` : '',
+      ].filter(Boolean).join('\n');
+      fullText = metaHeader + '\n\n' + fullText;
+    }
+  } catch {
+    // metadata not available, ignore
+  }
+
+  if (fullText.length > 15000) {
+    fullText = fullText.substring(0, 15000) + '\n\n[内容已截断]';
   }
 
   return fullText || '[PDF 中未提取到文本内容]';

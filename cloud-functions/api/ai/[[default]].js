@@ -183,25 +183,31 @@ async function handleParsePaper(request) {
     const apiKey = modelConfig?.apiKey || '';
     const model = modelConfig?.model || 'deepseek-chat';
 
-    const systemPrompt = `Extract academic paper metadata from the provided text. Return ONLY a JSON object with these fields:
-- title: paper title
-- authors: array of author names
-- year: publication year as number
-- month: publication month (1-12) or null
-- venue: journal or conference name
-- volume: volume number or empty string
-- issue: issue number or empty string
-- pages: page range or empty string
-- doi: DOI or empty string
-- url: paper URL or empty string
-- abstract: paper abstract or empty string
-- keywords: array of keywords
-- references: array of {title, authors, year, venue}
-Return compact valid JSON only, no markdown.`;
+    const systemPrompt = `You are a scholarly paper metadata extractor. Given the text of a paper (title, authors, abstract section), extract metadata and output ONLY a valid JSON object.
 
-    // 限制文本长度以加速处理（前 4000 字符通常已包含关键元数据）
-    const truncatedText = text.slice(0, 4000);
-    const userPrompt = `Extract metadata from this academic paper text:\n\n${truncatedText}`;
+Required JSON fields:
+- "title": string, paper title
+- "authors": string array, author full names
+- "year": number, publication year
+- "month": number or null, publication month 1-12
+- "venue": string, journal or conference name
+- "volume": string, volume number
+- "issue": string, issue number
+- "pages": string, page range e.g. "123-145"
+- "doi": string, DOI identifier
+- "url": string, paper URL if present
+- "abstract": string, the abstract text
+- "keywords": string array, keywords if present
+- "references": array of { "title": string, "authors": string[], "year": number, "venue": string }
+
+Output rules:
+1. Output ONLY the JSON object, no markdown, no explanation, no code fences.
+2. If a field cannot be found, use empty string "" or empty array [] or null.
+3. The JSON must be valid and parseable.`;
+
+    // 只发送前 3000 字符（标题+作者+摘要），避免全文噪音
+    const truncatedText = text.slice(0, 3000);
+    const userPrompt = `Extract metadata from this paper text:\n${truncatedText}`;
 
     const res = await callOpenAICompatibleApi(
       baseUrl, apiKey, model,
@@ -209,7 +215,7 @@ Return compact valid JSON only, no markdown.`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      { stream: false, temperature: 0.1, maxTokens: 1024, timeout: 55000 }
+      { stream: false, temperature: 0.05, maxTokens: 1024, timeout: 55000 }
     );
 
     const data = await res.json();
@@ -218,33 +224,22 @@ Return compact valid JSON only, no markdown.`;
     console.log('[CF-ParsePaper] AI raw content length:', content.length);
     console.log('[CF-ParsePaper] AI raw content preview:', content.slice(0, 500));
 
-    let parsed;
-    try {
-      // 尝试提取 JSON（AI 可能用 ```json 包裹，也可能直接返回 JSON）
-      let jsonStr = content.trim();
+    // ---- 尝试 1：直接解析 JSON ----
+    let parsed = tryParseJson(content);
 
-      // 移除 markdown 代码块标记
-      const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (codeBlockMatch) {
-        jsonStr = codeBlockMatch[1].trim();
-      }
-
-      // 尝试找到最外层的大括号结构
-      const firstBrace = jsonStr.indexOf('{');
-      const lastBrace = jsonStr.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
-      }
-
-      parsed = JSON.parse(jsonStr);
-      console.log('[CF-ParsePaper] JSON parsed successfully, keys:', Object.keys(parsed).join(', '));
-    } catch (parseErr) {
-      console.error('[CF-ParsePaper] JSON parse failed:', parseErr.message);
-      console.error('[CF-ParsePaper] Raw content:', content.slice(0, 1000));
-      parsed = {};
+    // ---- 尝试 2：若 JSON 解析失败，用正则从文本中提取关键信息 ----
+    if (!parsed || !(parsed.title || parsed.authors?.length || parsed.abstract)) {
+      console.log('[CF-ParsePaper] JSON parse yielded empty result, trying regex fallback...');
+      parsed = extractWithRegex(content);
     }
 
-    // 字段映射与默认值（兼容 AI 可能返回的 journal/number 等旧字段名）
+    // ---- 尝试 3：若仍为空，尝试从原始 PDF 文本中用正则提取 ----
+    if (!parsed || !(parsed.title || parsed.authors?.length || parsed.abstract)) {
+      console.log('[CF-ParsePaper] Regex fallback also empty, trying extract from original text...');
+      parsed = extractWithRegex(text.slice(0, 4000));
+    }
+
+    // 字段映射与默认值
     const result = {
       title: parsed.title || '',
       authors: Array.isArray(parsed.authors) ? parsed.authors : [],
@@ -266,11 +261,11 @@ Return compact valid JSON only, no markdown.`;
     // 检查是否成功提取到有效内容
     const hasMeaningfulData = result.title || result.authors.length > 0 || result.abstract;
     if (!hasMeaningfulData) {
-      console.error('[CF-ParsePaper] No meaningful data extracted from AI response');
+      console.error('[CF-ParsePaper] No meaningful data extracted, raw AI content:', content.slice(0, 2000));
       return jsonResponse({
         success: false,
         error: 'AI 未能从文本中提取到有效的文献信息，请检查文本内容或稍后重试',
-        debug: { rawContent: content.slice(0, 1000) },
+        debug: { rawContent: content.slice(0, 1500), parsedKeys: parsed ? Object.keys(parsed) : [] },
       }, 422);
     }
 
@@ -287,6 +282,71 @@ Return compact valid JSON only, no markdown.`;
     console.error('[CF-ParsePaper] Error:', e.name, e.message);
     return jsonResponse({ success: false, error: e.message, debug: { name: e.name, message: e.message } }, 502);
   }
+}
+
+// ---- 辅助函数：尝试解析 JSON（支持多种格式）----
+function tryParseJson(str) {
+  try {
+    let jsonStr = str.trim();
+
+    // 移除 markdown 代码块
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim();
+    }
+
+    // 找到最外层 {}
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+    }
+
+    const parsed = JSON.parse(jsonStr);
+    console.log('[CF-ParsePaper] JSON parsed OK, keys:', Object.keys(parsed).join(', '));
+    return parsed;
+  } catch (e) {
+    console.log('[CF-ParsePaper] JSON parse failed:', e.message);
+    return null;
+  }
+}
+
+// ---- 辅助函数：用正则从文本中提取文献信息 ----
+function extractWithRegex(text) {
+  const result = {};
+
+  // Title: 找第一行或大写开头的短句
+  const titleMatch = text.match(/(?:Title|题目)[:\s]*([^\n]{10,200})/i)
+    || text.match(/^([A-Z][^\n.!?]{10,200})\n/gm);
+  if (titleMatch) result.title = titleMatch[1].trim();
+
+  // Authors: 找 "Authors:" 或连续的大写姓名
+  const authorMatch = text.match(/(?:Authors|作者)[:\s]*([^\n]{5,200})/i);
+  if (authorMatch) {
+    result.authors = authorMatch[1].split(/[,;]/).map(s => s.trim()).filter(Boolean);
+  }
+
+  // Year: 找 4 位数字
+  const yearMatch = text.match(/(?:Year|年份|©)\s*[:\s]*(\d{4})/i)
+    || text.match(/(\d{4})\s*(?:IEEE|ACM|Springer|Elsevier)/i);
+  if (yearMatch) result.year = parseInt(yearMatch[1]);
+
+  // Abstract: 找 Abstract 段落
+  const abstractMatch = text.match(/(?:Abstract|摘要)[\s\S]{0,50}?([\s\S]{50,2000}?)(?:\n\s*\n|\n(?:Index|Keywords|I\.?\s+INTRODUCTION|\d+\.?\s+[A-Z]))/i);
+  if (abstractMatch) result.abstract = abstractMatch[1].trim().replace(/\s+/g, ' ').slice(0, 1500);
+
+  // Venue/Journal
+  const venueMatch = text.match(/(?:Journal|Conference|Venue|期刊|会议)[:\s]*([^\n]{3,100})/i)
+    || text.match(/IEEE Transactions on ([^\n,]{5,100})/i);
+  if (venueMatch) result.venue = venueMatch[1].trim();
+
+  // DOI
+  const doiMatch = text.match(/DOI[:\s]*([^\s]{10,100})/i)
+    || text.match(/(10\.\d{4,9}\/[\S]+)/i);
+  if (doiMatch) result.doi = doiMatch[1].trim();
+
+  console.log('[CF-ParsePaper] Regex extract result:', JSON.stringify(result).slice(0, 300));
+  return result;
 }
 
 // ============================================================
