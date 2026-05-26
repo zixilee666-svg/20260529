@@ -233,13 +233,29 @@ async function handleAiChat(request) {
     if (!user) return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
 
     const body = await request.json();
-    const { messages, modelConfig, conversationId } = body;
+    // 前端发送: { conversationId, message, context, modelConfig }
+    const { message, context, modelConfig, conversationId } = body;
 
     const baseUrl = modelConfig?.baseUrl || '';
     const apiKey = modelConfig?.apiKey || '';
     const model = modelConfig?.model || 'deepseek-chat';
 
     console.log('[CF-AiChat] model:', model, 'baseUrl:', baseUrl.replace(/https?:\/\/[^/]+/, '***'), 'conversationId:', conversationId);
+
+    // 将前端的 message + context 转换为 OpenAI messages 格式
+    const messages = [];
+    if (context) {
+      messages.push({ role: 'system', content: context });
+    }
+    if (message) {
+      messages.push({ role: 'user', content: message });
+    }
+
+    if (messages.length === 0) {
+      return jsonResponse({ success: false, error: 'Message is required' }, 400);
+    }
+
+    console.log('[CF-AiChat] messages count:', messages.length);
 
     const res = await callOpenAICompatibleApi(
       baseUrl, apiKey, model, messages,
