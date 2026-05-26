@@ -563,6 +563,8 @@ function handleMockRequest(path: string, method: string, body?: any): any {
   if (path === '/auth/register' && method === 'POST') {
     const { username, password } = body || {};
     if (!username || !password) throw new Error('请填写必要信息');
+    // 保存注册密码到 localStorage，确保后续登录可用
+    setMockPassword(username, password);
     const newUser = { ...mockUser, id: 'mock-user-' + Date.now(), username, institution: body?.institution };
     return { success: true, data: { token: mockToken, user: newUser } };
   }
