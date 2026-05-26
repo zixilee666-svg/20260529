@@ -64,6 +64,9 @@ export default function AIChatPage() {
   const [loadingConv, setLoadingConv] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // 持久化 ref：跟踪最新 state 用于 save 时读取
+  const messagesRef = useRef<AIMessage[]>([]);
+  const conversationsRef = useRef<AIConversation[]>([]);
 
   // 输入框自动增高
   useEffect(() => {
@@ -81,6 +84,27 @@ export default function AIChatPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // 同步 ref（用于延迟保存时读取最新状态）
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+
+  // 持久化当前对话到 KV
+  const persistCurrentConv = useCallback((convId: string) => {
+    setTimeout(() => {
+      try {
+        const conv = conversationsRef.current.find(c => c.id === convId);
+        if (!conv || messagesRef.current.length === 0) return;
+        api.saveConversation(convId, {
+          ...conv,
+          messages: messagesRef.current,
+          updatedAt: new Date().toISOString(),
+        }).catch(e => console.error('[AIChat] Save failed:', e));
+      } catch (e) {
+        console.error('[AIChat] Persist error:', e);
+      }
+    }, 200); // 等 React 批量更新完成
+  }, []);
 
   // Load conversations on mount
   useEffect(() => {
@@ -209,6 +233,28 @@ export default function AIChatPage() {
             }
           }
         } catch { /* stream error */ }
+
+        // 流式完成后：同步 conversations 状态 + 持久化 KV
+        const aiMsg: AIMessage = {
+          id: aiMsgId,
+          role: 'assistant',
+          content: aiContent || '贞德正在思考中...',
+          timestamp: new Date().toISOString(),
+        };
+        if (convId) {
+          setConversations(prev => prev.map(c => {
+            if (c.id !== convId) return c;
+            return {
+              ...c,
+              messages: [...c.messages, userMsg, aiMsg],
+              title: c.title === '新的学术对话'
+                ? textToSend.slice(0, 30) + (textToSend.length > 30 ? '...' : '')
+                : c.title,
+              updatedAt: new Date().toISOString(),
+            };
+          }));
+          persistCurrentConv(convId);
+        }
       } else {
         // JSON response (mock mode or fallback)
         const data = await response.json();
@@ -240,6 +286,7 @@ export default function AIChatPage() {
               updatedAt: new Date().toISOString(),
             };
           }));
+          persistCurrentConv(convId);
         }
       }
     } catch (err) {
@@ -265,6 +312,8 @@ export default function AIChatPage() {
       setMessages(remaining[0] ? (remaining[0].messages || []).filter((m: AIMessage) => m.role !== 'system') : []);
       setShowQuickPrompts(true);
     }
+    // 同步删除 KV 中的对话
+    api.deleteConversationRemote(id).catch(e => console.error('[AIChat] Delete failed:', e));
     toast.success('对话已删除');
   };
 

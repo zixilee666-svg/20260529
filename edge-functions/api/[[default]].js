@@ -103,6 +103,42 @@ async function kvListRemove(listKey, item) {
 }
 
 // ============================================================
+// AI 对话持久化 (KV)
+// ============================================================
+const AI_CONV_INDEX_PREFIX = 'ai_conv_index:';
+const AI_CONV_PREFIX = 'ai_conv:';
+
+async function getConvIndex(userId) {
+  return kvGetJson(AI_CONV_INDEX_PREFIX + userId) || [];
+}
+
+async function updateConvIndex(userId, convId, title, updatedAt) {
+  const index = await getConvIndex(userId);
+  const existing = index.find(c => c.id === convId);
+  if (existing) {
+    existing.title = title;
+    existing.updatedAt = updatedAt;
+  } else {
+    index.unshift({ id: convId, title, updatedAt });
+  }
+  await kvSetJson(AI_CONV_INDEX_PREFIX + userId, index);
+}
+
+async function removeFromConvIndex(userId, convId) {
+  const index = await getConvIndex(userId);
+  await kvSetJson(AI_CONV_INDEX_PREFIX + userId, index.filter(c => c.id !== convId));
+}
+
+async function getConversation(userId, convId) {
+  return kvGetJson(AI_CONV_PREFIX + userId + ':' + convId);
+}
+
+async function saveConversation(userId, convId, convData) {
+  await kvSetJson(AI_CONV_PREFIX + userId + ':' + convId, convData);
+  await updateConvIndex(userId, convId, convData.title || '未命名对话', convData.updatedAt || new Date().toISOString());
+}
+
+// ============================================================
 // Generic OpenAI-compatible AI API
 // Supports: Kimi, DeepSeek, Doubao, Claude(OpenAI-compat), OpenAI, Custom
 // ============================================================
@@ -284,10 +320,23 @@ async function handleAiChat(request) {
 
     const systemPrompt = '你是 Joan\'s Academic Hub 的学术助手，名为「贞德」。你擅长学术文献分析、研究方法指导和学术写作建议。回答应当严谨、专业、简洁。';
 
-    const res = await callOpenAICompatibleApi(baseUrl, apiKey, model || 'moonshot-v1-8k', [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: message },
-    ], { stream: true, temperature: 0.7 });
+    // 构建消息列表（含历史上下文）
+    const messages = [{ role: 'system', content: systemPrompt }];
+    if (conversationId) {
+      const authPayload = await authenticate(request, JWT_SECRET);
+      if (authPayload) {
+        const userId = authPayload.userId || authPayload.sub || 'anonymous';
+        const conv = await getConversation(userId, conversationId);
+        if (conv && conv.messages && conv.messages.length > 0) {
+          // 包含最近 20 条消息作为上下文
+          const recentMessages = conv.messages.slice(-20);
+          messages.push(...recentMessages.map(m => ({ role: m.role, content: m.content })));
+        }
+      }
+    }
+    messages.push({ role: 'user', content: message });
+
+    const res = await callOpenAICompatibleApi(baseUrl, apiKey, model || 'moonshot-v1-8k', messages, { stream: true, temperature: 0.7 });
 
     // Transform OpenAI SSE to our frontend format
     const transformStream = new TransformStream({
@@ -3074,9 +3123,58 @@ export async function onRequest(context) {
   // AI 路由
   // ========================================
   if (segments[0] === 'ai') {
-    if (segments[1] === 'conversations' && request.method === 'GET') {
-      return success([], 'Success', request);
+    // —— 对话 CRUD（需认证）——
+    if (segments[1] === 'conversations') {
+      const authPayload = await authenticate(request, JWT_SECRET);
+      if (!authPayload) return unauthorized(request);
+      const userId = authPayload.userId || authPayload.sub || 'anonymous';
+
+      // GET /api/ai/conversations — 获取所有对话（返回完整数据，含 messages）
+      if (request.method === 'GET' && !segments[2]) {
+        const index = await getConvIndex(userId);
+        // 按 updatedAt 降序排列
+        index.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+        // 为每个对话加载完整数据
+        const conversations = [];
+        for (const entry of index) {
+          const conv = await getConversation(userId, entry.id);
+          if (conv) conversations.push(conv);
+        }
+        return success(conversations, 'Success', request);
+      }
+
+      // GET /api/ai/conversations/:id — 获取单个对话
+      if (request.method === 'GET' && segments[2]) {
+        const conv = await getConversation(userId, segments[2]);
+        if (!conv) return success(null, 'Conversation not found', request);
+        return success(conv, 'Success', request);
+      }
+
+      // PUT /api/ai/conversations/:id — 保存/更新对话
+      if (request.method === 'PUT' && segments[2]) {
+        try {
+          const body = await request.json();
+          const convData = {
+            ...body,
+            userId,
+            id: segments[2],
+            updatedAt: new Date().toISOString(),
+          };
+          await saveConversation(userId, segments[2], convData);
+          return success(convData, 'Conversation saved', request);
+        } catch (e) {
+          return apiError('Invalid request body', 400, 'INVALID_BODY', request);
+        }
+      }
+
+      // DELETE /api/ai/conversations/:id — 删除对话
+      if (request.method === 'DELETE' && segments[2]) {
+        await kvDel(AI_CONV_PREFIX + userId + ':' + segments[2]);
+        await removeFromConvIndex(userId, segments[2]);
+        return success(null, 'Conversation deleted', request);
+      }
     }
+
     if (segments[1] === 'chat' && request.method === 'POST') {
       return handleAiChat(request);
     }

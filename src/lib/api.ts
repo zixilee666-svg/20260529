@@ -1464,6 +1464,23 @@ class ApiClient {
     return this.request<{ success: boolean; data: AIConversation[] }>('/ai/conversations');
   }
 
+  async getConversation(convId: string) {
+    return this.request<{ success: boolean; data: AIConversation | null }>(`/ai/conversations/${convId}`);
+  }
+
+  async saveConversation(convId: string, data: AIConversation) {
+    return this.request<{ success: boolean; data: AIConversation }>(`/ai/conversations/${convId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteConversationRemote(convId: string) {
+    return this.request<{ success: boolean }>(`/ai/conversations/${convId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async parsePaper(text: string, modelConfig?: { baseUrl: string; apiKey: string; model: string }) {
     return this.request<{
       success: boolean;
