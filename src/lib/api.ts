@@ -515,23 +515,50 @@ function mockDelay(ms = 300): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ---- Mock 密码存储（localStorage 持久化） ----
+const MOCK_PWD_PREFIX = 'mock_pwd:';
+const MOCK_DEFAULT_PASSWORDS: Record<string, string> = {
+  admin: '123456',
+  joan: '11223344',
+};
+
+function getMockPassword(username: string): string {
+  try {
+    const stored = localStorage.getItem(MOCK_PWD_PREFIX + username);
+    return stored || MOCK_DEFAULT_PASSWORDS[username] || '';
+  } catch {
+    return MOCK_DEFAULT_PASSWORDS[username] || '';
+  }
+}
+
+function setMockPassword(username: string, password: string): void {
+  try {
+    localStorage.setItem(MOCK_PWD_PREFIX + username, password);
+  } catch { /* localStorage 不可用时静默忽略 */ }
+}
+
 // ---- Mock 请求处理器 ----
 function handleMockRequest(path: string, method: string, body?: any): any {
   // Auth
   if (path === '/auth/login' && method === 'POST') {
     const { username, password } = body || {};
     if (!username || !password) throw new Error('请输入用户名和密码');
-    // 固定管理员
-    if (username === 'admin' && password === '123456') {
+    // 检查 Mock 密码（支持修改后的密码）
+    const expectedPassword = getMockPassword(username);
+    if (username === 'admin' && password === expectedPassword) {
       const adminUser = { ...mockUser, username: 'admin', id: 'admin-fixed', role: 'admin' as const, displayName: 'Administrator' };
       return { success: true, data: { token: mockToken, user: adminUser } };
     }
     // 贞德演示账号
-    if (username === 'joan' && password === '11223344') {
+    if (username === 'joan' && password === expectedPassword) {
       return { success: true, data: { token: mockJoanToken, user: mockJoanUser } };
     }
-    const user = { ...mockUser, username };
-    return { success: true, data: { token: mockToken, user } };
+    // 其他已注册用户（通过 localStorage 中的模拟密码验证）
+    if (expectedPassword && password === expectedPassword) {
+      const user = { ...mockUser, username, id: 'mock-user-' + username };
+      return { success: true, data: { token: mockToken, user } };
+    }
+    throw new Error('用户名或密码错误');
   }
   if (path === '/auth/register' && method === 'POST') {
     const { username, password } = body || {};
@@ -556,7 +583,7 @@ function handleMockRequest(path: string, method: string, body?: any): any {
     return { success: true };
   }
 
-  // Change password (Mock)
+  // Change password (Mock) — 支持真实保存新密码
   if (path === '/auth/change-password' && method === 'POST') {
     const { currentPassword, newPassword } = body || {};
     if (!currentPassword || !newPassword) {
@@ -565,10 +592,22 @@ function handleMockRequest(path: string, method: string, body?: any): any {
     if (newPassword.length < 6) {
       throw new ApiError(ApiErrorCode.VALIDATION_ERROR, '新密码至少 6 个字符');
     }
-    // In mock mode, validate against known passwords
-    if (currentPassword !== '123456' && currentPassword !== '11223344') {
+    // 从 localStorage 读取当前存储的密码（不是固定值）
+    const storedUser = localStorage.getItem('joan_academic_user');
+    let username = 'admin';
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        username = parsed?.state?.user?.username || parsed?.user?.username || parsed?.username || 'admin';
+      } catch { /* ignore */ }
+    }
+    const expectedPassword = getMockPassword(username);
+    if (currentPassword !== expectedPassword) {
       throw new ApiError('INVALID_PASSWORD', '当前密码错误');
     }
+    // 真正保存新密码到 localStorage
+    setMockPassword(username, newPassword);
+    console.log(`[Mock] 密码已修改 (用户: ${username})`);
     return { success: true, message: 'Password changed successfully' };
   }
 
