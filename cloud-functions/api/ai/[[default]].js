@@ -224,7 +224,7 @@ async function handleParsePaper(request) {
 }
 
 // ============================================================
-// handleAiChat (SSE streaming)
+// handleAiChat (JSON response - non-streaming)
 // ============================================================
 
 async function handleAiChat(request) {
@@ -259,20 +259,17 @@ async function handleAiChat(request) {
 
     const res = await callOpenAICompatibleApi(
       baseUrl, apiKey, model, messages,
-      { stream: true, temperature: 0.7, maxTokens: 4096, timeout: 55000 }
+      { stream: false, temperature: 0.7, maxTokens: 4096, timeout: 55000 }
     );
 
     console.log('[CF-AiChat] AI API response status:', res.status);
 
-    // 直接传递 res.body，无需 TransformStream（Cloud Function Node.js 环境可能不支持）
-    return new Response(res.body, {
-      status: res.status,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-      },
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content || '';
+
+    return jsonResponse({
+      success: true,
+      data: { reply: content, conversationId },
     });
   } catch (e) {
     console.error('[CF-AiChat] Error:', e.name, e.message, e.stack);
