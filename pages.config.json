@@ -5,10 +5,6 @@
   "outputDirectory": "./dist",
   "routes": [
     {
-      "path": "/api/*",
-      "target": "./edge-functions"
-    },
-    {
       "path": "/*",
       "target": "./dist"
     }
