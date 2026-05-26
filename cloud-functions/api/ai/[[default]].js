@@ -61,7 +61,7 @@ async function authenticate(request) {
 // AI API 调用（Cloud Function 可以访问外部网络）
 // ============================================================
 
-async function callOpenAICompatibleApi(baseUrl, apiKey, model, messages, { stream = false, temperature = 0.3, maxTokens = 4096, timeout = 55000 } = {}) {
+async function callOpenAICompatibleApi(baseUrl, apiKey, model, messages, { stream = false, temperature = 0.3, maxTokens = 4096, timeout = 20000 } = {}) {
   // 移除 baseUrl 末尾可能已有的 /chat/completions，避免重复拼接
   const base = baseUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '');
   const url = base + '/chat/completions';
@@ -183,9 +183,23 @@ async function handleParsePaper(request) {
     const apiKey = modelConfig?.apiKey || '';
     const model = modelConfig?.model || 'deepseek-chat';
 
-    const systemPrompt = `Extract academic paper metadata from the text. Return JSON with fields: title, authors(array), abstract, journal, year, volume, number, pages, doi, url, keywords(array), citeKey.`;
-    
-    const userPrompt = `Paper text (first 6000 chars):\n${text.slice(0, 6000)}`;
+    const systemPrompt = `You are an academic paper metadata extractor. Extract metadata from the provided text and return a JSON object with these exact fields:
+- title: string (paper title)
+- authors: string[] (list of author names)
+- year: number (publication year)
+- month: number or null (publication month, 1-12)
+- venue: string (journal or conference name)
+- volume: string (volume number)
+- issue: string (issue number)
+- pages: string (page range, e.g., "123-145")
+- doi: string (DOI identifier)
+- url: string (paper URL)
+- abstract: string (paper abstract)
+- keywords: string[] (list of keywords)
+- references: array of {title: string, authors: string[], year: number, venue: string} (related papers cited)
+Return ONLY valid JSON, no markdown formatting.`;
+
+    const userPrompt = `Extract metadata from this paper text (first 8000 chars):\n\n${text.slice(0, 8000)}`;
 
     const res = await callOpenAICompatibleApi(
       baseUrl, apiKey, model,
@@ -193,12 +207,12 @@ async function handleParsePaper(request) {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      { stream: false, temperature: 0.1, maxTokens: 1024, timeout: 55000 }
+      { stream: false, temperature: 0.1, maxTokens: 2048, timeout: 20000 }
     );
 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content || '';
-    
+
     let parsed;
     try {
       // 尝试提取 JSON（AI 可能用 ```json 包裹）
@@ -208,14 +222,31 @@ async function handleParsePaper(request) {
       parsed = { raw: content };
     }
 
+    // 字段映射与默认值（兼容 AI 可能返回的 journal/number 等旧字段名）
+    const result = {
+      title: parsed.title || '',
+      authors: Array.isArray(parsed.authors) ? parsed.authors : [],
+      year: Number(parsed.year) || new Date().getFullYear(),
+      month: parsed.month ?? null,
+      venue: parsed.venue || parsed.journal || '',
+      volume: parsed.volume || '',
+      issue: parsed.issue || parsed.number || '',
+      pages: parsed.pages || '',
+      doi: parsed.doi || '',
+      url: parsed.url || '',
+      abstract: parsed.abstract || '',
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+      references: Array.isArray(parsed.references) ? parsed.references : [],
+    };
+
     // 服务端生成引用格式
-    const bibtex = generateBibTeX(parsed);
-    const ieee = generateIEEE(parsed);
-    const gb7714 = generateGB7714(parsed);
+    const bibtex = generateBibTeX(result);
+    const ieee = generateIEEE(result);
+    const gb7714 = generateGB7714(result);
 
     return jsonResponse({
       success: true,
-      data: { ...parsed, bibtex, ieee, gb7714 },
+      data: { ...result, citations: { bibtex, ieee, gb7714 } },
     });
   } catch (e) {
     console.error('[CF-ParsePaper] Error:', e.name, e.message);
@@ -259,7 +290,7 @@ async function handleAiChat(request) {
 
     const res = await callOpenAICompatibleApi(
       baseUrl, apiKey, model, messages,
-      { stream: false, temperature: 0.7, maxTokens: 4096, timeout: 55000 }
+      { stream: false, temperature: 0.7, maxTokens: 4096, timeout: 20000 }
     );
 
     console.log('[CF-AiChat] AI API response status:', res.status);

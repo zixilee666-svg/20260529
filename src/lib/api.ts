@@ -1460,25 +1460,55 @@ class ApiClient {
     });
   }
 
+  // 对话保存使用 localStorage（Cloud Function 无法访问 KV，降级为前端持久化）
   async getConversations() {
-    return this.request<{ success: boolean; data: AIConversation[] }>('/ai/conversations');
+    try {
+      const raw = localStorage.getItem('ai_conversations');
+      const conversations = raw ? JSON.parse(raw) : [];
+      return { success: true, data: conversations };
+    } catch {
+      return { success: true, data: [] };
+    }
   }
 
   async getConversation(convId: string) {
-    return this.request<{ success: boolean; data: AIConversation | null }>(`/ai/conversations/${convId}`);
+    try {
+      const raw = localStorage.getItem('ai_conversations');
+      const conversations = raw ? JSON.parse(raw) : [];
+      const conv = conversations.find((c: any) => c.id === convId) || null;
+      return { success: true, data: conv };
+    } catch {
+      return { success: true, data: null };
+    }
   }
 
-  async saveConversation(convId: string, data: AIConversation) {
-    return this.request<{ success: boolean; data: AIConversation }>(`/ai/conversations/${convId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async saveConversation(convId: string, data: any) {
+    try {
+      const raw = localStorage.getItem('ai_conversations');
+      const conversations: any[] = raw ? JSON.parse(raw) : [];
+      const idx = conversations.findIndex((c: any) => c.id === convId);
+      if (idx >= 0) {
+        conversations[idx] = { ...data, updatedAt: new Date().toISOString() };
+      } else {
+        conversations.unshift({ ...data, updatedAt: new Date().toISOString() });
+      }
+      localStorage.setItem('ai_conversations', JSON.stringify(conversations));
+      return { success: true, data };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
   }
 
   async deleteConversationRemote(convId: string) {
-    return this.request<{ success: boolean }>(`/ai/conversations/${convId}`, {
-      method: 'DELETE',
-    });
+    try {
+      const raw = localStorage.getItem('ai_conversations');
+      const conversations: any[] = raw ? JSON.parse(raw) : [];
+      const filtered = conversations.filter((c: any) => c.id !== convId);
+      localStorage.setItem('ai_conversations', JSON.stringify(filtered));
+      return { success: true };
+    } catch {
+      return { success: true };
+    }
   }
 
   async parsePaper(text: string, modelConfig?: { baseUrl: string; apiKey: string; model: string }) {
@@ -1502,7 +1532,7 @@ class ApiClient {
       };
     }>('/ai/parse-paper', {
       method: 'POST',
-      timeout: 120000,
+      timeout: 25000,
       body: JSON.stringify({ text, modelConfig }),
     });
   }
