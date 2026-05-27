@@ -214,6 +214,8 @@ export default function AIChatPage() {
           timestamp: new Date().toISOString(),
         }]);
 
+        let streamEnded = false;
+        let streamError = '';
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -223,7 +225,10 @@ export default function AIChatPage() {
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 const jsonStr = line.slice(6).trim();
-                if (jsonStr === '[DONE]') break;
+                if (jsonStr === '[DONE]') {
+                  streamEnded = true;
+                  break;
+                }
                 try {
                   const data = JSON.parse(jsonStr);
                   // 兼容两种 SSE 格式：
@@ -239,14 +244,23 @@ export default function AIChatPage() {
                 } catch { /* ignore SSE parse errors */ }
               }
             }
+            if (streamEnded) break;
           }
-        } catch { /* stream error */ }
+        } catch (e: any) {
+          streamError = e.message || '流读取异常';
+          console.error('[AIChat] SSE stream error:', streamError);
+        }
 
-        // 流式完成后：同步 conversations 状态 + 持久化 KV
+        // 流式完成后：检测是否被截断
+        const isTruncated = !streamEnded && !streamError;
+        const finalContent = aiContent
+          ? (isTruncated ? aiContent + '\n\n_⚠️ 回答可能不完整，请刷新后重试_' : aiContent)
+          : (streamError ? '⚠️ 连接异常：' + streamError : '贞德正在思考中...');
+
         const aiMsg: AIMessage = {
           id: aiMsgId,
           role: 'assistant',
-          content: aiContent || '贞德正在思考中...',
+          content: finalContent,
           timestamp: new Date().toISOString(),
         };
         if (convId) {
