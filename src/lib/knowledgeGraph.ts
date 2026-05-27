@@ -84,7 +84,7 @@ export function addZoteroPapersToLocalKG(papers: any[]): void {
   mergedGraph = null;
 }
 
-function getMergedGraph(): KnowledgeGraph {
+export function getMergedGraph(): KnowledgeGraph {
   if (mergedGraph) return mergedGraph;
 
   // 1. 合并学术知识图谱和项目知识图谱

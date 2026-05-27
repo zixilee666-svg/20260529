@@ -92,6 +92,7 @@ function AppRoutes() {
           <Route path="project/:id" element={<ProjectDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="import-export" element={<ImportExportPage />} />
+          <Route path="knowledge" element={<KnowledgePage />} />
         </Route>
 
         {/* 管理员路由 */}
@@ -111,6 +112,7 @@ function AppRoutes() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="admin" element={<AdminPage />} />
           <Route path="import-export" element={<ImportExportPage />} />
+          <Route path="knowledge" element={<KnowledgePage />} />
         </Route>
       </Routes>
     </AnimatePresence>

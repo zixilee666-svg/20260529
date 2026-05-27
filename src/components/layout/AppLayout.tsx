@@ -8,6 +8,7 @@ import {
   FileDown, Shield, Moon, Sun, Monitor,
   LogOut, Scale, Menu, X,
   FolderOpen, FileText, MessageSquare, Globe,
+  Database,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
@@ -23,6 +24,7 @@ const navItems = [
   { to: '/dashboard/ai-chat', icon: MessageSquare, label: 'AI 对话' },
   { to: '/dashboard/research', icon: FlaskConical, label: '我的研究' },
   { to: '/dashboard/import-export', icon: FileDown, label: '导入导出' },
+  { to: '/dashboard/knowledge', icon: Database, label: '知识图谱' },
   { to: '/dashboard/settings', icon: Settings, label: '设置' },
 ];
 
