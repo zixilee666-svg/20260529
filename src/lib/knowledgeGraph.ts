@@ -248,12 +248,119 @@ function formatEntityAsContext(entity: KnowledgeEntity): string {
   return parts.join('\n');
 }
 
+// ===== 子图划分 =====
+
+export interface KnowledgeSubgraph {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  entityIds: string[]; // 子图包含的实体ID列表
+}
+
+/** 预定义的子图分类 */
+const SUBGRAPH_DEFS: Omit<KnowledgeSubgraph, 'entityIds'>[] = [
+  {
+    id: 'subgraph:gnn-basics',
+    name: 'GNN 基础理论',
+    description: '图神经网络核心概念与经典模型',
+    icon: 'Network',
+  },
+  {
+    id: 'subgraph:mtpnet',
+    name: 'MTPNet 论文',
+    description: '多时间感知模式网络的架构与机制',
+    icon: 'Clock',
+  },
+  {
+    id: 'subgraph:baselines',
+    name: '基线模型',
+    description: 'HGNN领域经典基线方法对比',
+    icon: 'BarChart3',
+  },
+  {
+    id: 'subgraph:fraud-detection',
+    name: '欺诈检测任务',
+    description: '金融欺诈检测的核心任务与评估',
+    icon: 'Shield',
+  },
+  {
+    id: 'subgraph:datasets',
+    name: '数据集',
+    description: 'YelpChi、Amazon、TFinance等实验数据集',
+    icon: 'Database',
+  },
+  {
+    id: 'subgraph:advanced',
+    name: '前沿方法',
+    description: '对比学习、伪装识别、概念漂移等前沿技术',
+    icon: 'Sparkles',
+  },
+];
+
+/** 子图实体ID映射（硬编码分类） */
+const SUBGRAPH_ENTITY_MAP: Record<string, string[]> = {
+  'subgraph:gnn-basics': [
+    'concept:gnn', 'concept:hgnn', 'concept:meta-path',
+    'method:gcn', 'method:gat', 'method:graphsage', 'method:han',
+  ],
+  'subgraph:mtpnet': [
+    'method:mtpnet', 'concept:temporal-graph', 'concept:fraud-detection',
+    'dataset:yelpchi', 'dataset:amazon', 'metric:auc', 'metric:f1',
+  ],
+  'subgraph:baselines': [
+    'method:gcn', 'method:gat', 'method:graphsage', 'method:han',
+    'method:rgcn', 'method:hgt',
+  ],
+  'subgraph:fraud-detection': [
+    'concept:fraud-detection', 'task:node-classification', 'task:anomaly-detection',
+    'concept:class-imbalance', 'concept:concept-drift', 'metric:auc', 'metric:f1',
+  ],
+  'subgraph:datasets': [
+    'dataset:yelpchi', 'dataset:amazon', 'dataset:tfinance',
+    'task:node-classification', 'concept:fraud-detection',
+  ],
+  'subgraph:advanced': [
+    'method:cafu-hgfm', 'method:th-gcl', 'concept:class-imbalance',
+    'concept:concept-drift', 'concept:meta-path',
+  ],
+};
+
+export function getSubgraphs(): KnowledgeSubgraph[] {
+  const graph = getMergedGraph();
+  const entityMap = new Map(graph.entities.map(e => [e.id, e]));
+
+  return SUBGRAPH_DEFS.map(def => {
+    const ids = SUBGRAPH_ENTITY_MAP[def.id] || [];
+    // 过滤掉不存在的实体
+    const validIds = ids.filter(id => entityMap.has(id));
+    return {
+      ...def,
+      entityIds: validIds,
+    };
+  }).filter(sg => sg.entityIds.length > 0);
+}
+
+export function getSubgraphData(subgraphId: string): { entities: KnowledgeEntity[]; relations: import('../types').KnowledgeRelation[] } {
+  const graph = getMergedGraph();
+  const entityIds = new Set(SUBGRAPH_ENTITY_MAP[subgraphId] || []);
+
+  const entities = graph.entities.filter(e => entityIds.has(e.id));
+  const relations = graph.relations.filter(
+    r => entityIds.has(r.source) && entityIds.has(r.target)
+  );
+
+  return { entities, relations };
+}
+
 // ----- 导出默认实例（单例模式） -----
 
 const knowledgeGraphLib = {
   searchKnowledge,
   getEntityById,
   getRelatedEntities,
+  getSubgraphs,
+  getSubgraphData,
 };
 
 export default knowledgeGraphLib;
