@@ -3,7 +3,6 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Search,
-  GraduationCap,
   BookOpen,
   Globe,
   Users,
@@ -33,6 +32,7 @@ import {
 import AnimatedPage from '@/components/shared/AnimatedPage';
 import Loading from '@/components/common/Loading';
 import Pagination from '@/components/common/Pagination';
+import JoanLearningGNN from '@/components/gallery/JoanLearningGNN';
 
 // ── SpaceCard ──
 function SpaceCard({ space, featured = false }: { space: SpaceConfig; featured?: boolean }) {
@@ -303,10 +303,10 @@ export default function GalleryPage() {
           >
             <h1 className="text-3xl sm:text-4xl font-bold text-primary-800 dark:text-ivory-100 font-display mb-3">
               <Sparkles className="inline w-8 h-8 mr-2 text-accent-500" />
-              学术空间画廊
+              学术贞德画廊
             </h1>
             <p className="text-base text-primary-500 dark:text-primary-300 max-w-2xl mx-auto">
-              探索卓越研究者的学术世界，发现前沿研究与创新项目
+              探索贞德的学术世界，发现图神经网络与金融欺诈检测的前沿研究
             </p>
           </motion.div>
 
@@ -353,7 +353,7 @@ export default function GalleryPage() {
             onClick={() => setViewMode('spaces')}
           >
             <Globe className="w-4 h-4" />
-            学术空间
+            学术贞德
           </Button>
           <Button
             variant={viewMode === 'projects' ? 'default' : 'outline'}
@@ -378,7 +378,7 @@ export default function GalleryPage() {
               <div className="flex items-center gap-2 bg-white/60 dark:bg-primary-800/60 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm">
                 <Users className="w-5 h-5 text-primary" />
                 <strong className="text-foreground">{totalSpaces}</strong>
-                <span className="text-muted-foreground">位学者</span>
+                <span className="text-muted-foreground">位贞德</span>
               </div>
               <div className="flex items-center gap-2 bg-white/60 dark:bg-primary-800/60 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm">
                 <BookOpen className="w-5 h-5 text-primary" />
@@ -390,7 +390,7 @@ export default function GalleryPage() {
               <div className="flex items-center gap-2 bg-white/60 dark:bg-primary-800/60 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm">
                 <Globe className="w-5 h-5 text-primary" />
                 <strong className="text-foreground">{totalSpaces}</strong>
-                <span className="text-muted-foreground">个空间</span>
+                <span className="text-muted-foreground">个贞德</span>
               </div>
             </>
           ) : (
@@ -473,20 +473,17 @@ export default function GalleryPage() {
         {/* Results */}
         <div className="mt-8">
           {loading ? (
-            <Loading message={viewMode === 'spaces' ? '正在加载学术空间...' : '正在加载研究项目...'} />
+            <Loading message={viewMode === 'spaces' ? '正在召唤学术贞德...' : '正在加载研究项目...'} />
           ) : viewMode === 'spaces' ? (
             spaces.length === 0 ? (
               <motion.div
-                className="text-center py-16"
+                className="text-center py-10"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <GraduationCap className="w-16 h-16 mx-auto text-primary-300 mb-4" />
-                <h3 className="text-lg font-semibold text-primary-800 dark:text-ivory-100 mb-2">
-                  暂无学术空间
-                </h3>
-                <p className="text-sm text-primary-400">
-                  尝试调整搜索条件或筛选器，或成为第一个创建空间的人！
+                <JoanLearningGNN />
+                <p className="text-sm text-primary-400 mt-4">
+                  尝试调整搜索条件，或成为第一个创建学术贞德的人！
                 </p>
               </motion.div>
             ) : (
@@ -513,7 +510,7 @@ export default function GalleryPage() {
                 {otherSpaces.length > 0 && (
                   <>
                     <h2 className="text-lg font-semibold text-primary-700 dark:text-ivory-200 mb-4">
-                      全部学术空间
+                      全部学术贞德
                     </h2>
                     <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {otherSpaces.map((space, idx) => (
@@ -548,16 +545,13 @@ export default function GalleryPage() {
           ) : (
             projects.length === 0 ? (
               <motion.div
-                className="text-center py-16"
+                className="text-center py-10"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <FlaskConical className="w-16 h-16 mx-auto text-primary-300 mb-4" />
-                <h3 className="text-lg font-semibold text-primary-800 dark:text-ivory-100 mb-2">
-                  暂无研究项目
-                </h3>
-                <p className="text-sm text-primary-400">
-                  在「我的研究」中创建项目后，将自动展示在这里！
+                <JoanLearningGNN />
+                <p className="text-sm text-primary-400 mt-4">
+                  在「我的研究」中创建项目后，贞德会帮你展示在这里！
                 </p>
               </motion.div>
             ) : (
