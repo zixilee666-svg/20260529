@@ -19,6 +19,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/store';
 import type { AIMessage, AIConversation } from '@/types';
+import knowledgeGraphLib from '@/lib/knowledgeGraph';
 
 const QUICK_PROMPTS = [
   '帮我梳理 GCN 的核心数学推导',
@@ -200,8 +201,14 @@ export default function AIChatPage() {
         return;
       }
 
+      // 搜索知识图谱，获取相关背景知识作为 context
+      const knowledgeSnippets = knowledgeGraphLib.searchKnowledge(textToSend, 3);
+      const contextText = knowledgeSnippets.length > 0
+        ? `【相关背景知识】\n${knowledgeSnippets.map(s => s.content).join('\n\n---\n\n')}`
+        : undefined;
+
       // Call API (mock or real)
-      const response = await api.aiChat(convId, textToSend, undefined, defaultModel);
+      const response = await api.aiChat(convId, textToSend, contextText, defaultModel);
 
       // Check if response is SSE stream
       const contentType = response.headers.get('Content-Type') || '';
