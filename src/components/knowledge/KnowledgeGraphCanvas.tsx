@@ -31,7 +31,7 @@ interface GraphLink {
 
 interface KnowledgeGraphCanvasProps {
   nodes: { id: string; name: string; type: string }[];
-  links: { source: string; target: string; relation: string; weight?: number }[];
+  links: { source: string; target: string; relation?: string; type?: string; weight?: number }[];
   onNodeClick?: (nodeId: string) => void;
 }
 
@@ -53,7 +53,7 @@ const DEFAULT_COLOR = { fill: '#F5F5F5', border: '#9E9E9E', shape: 'circle' as c
 const RELATION_LABELS: Record<string, string> = {
   is_a: '是一种', part_of: '属于', used_in: '被用于',
   proposed_in: '被提出于', outperforms: '优于', cites: '引用',
-  related_to: '相关于', has_code: '有代码实现',
+  related_to: '相关于', has_code: '有代码实现', uses: '使用',
 };
 
 // ===== Shape Drawing =====
@@ -235,12 +235,15 @@ export default function KnowledgeGraphCanvas({ nodes: rawNodes, links: rawLinks,
   }, [rawNodes, dimensions]);
 
   const links = useMemo<GraphLink[]>(() =>
-    rawLinks.map(l => ({
-      source: l.source,
-      target: l.target,
-      relation: RELATION_LABELS[l.relation] || l.relation,
-      weight: l.weight ?? 1,
-    })),
+    rawLinks.map(l => {
+      const relType = l.relation || l.type || '';
+      return {
+        source: l.source,
+        target: l.target,
+        relation: RELATION_LABELS[relType] || relType || '相关',
+        weight: l.weight ?? 1,
+      };
+    }),
     [rawLinks]
   );
 
