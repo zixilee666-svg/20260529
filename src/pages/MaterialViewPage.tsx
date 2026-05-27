@@ -234,7 +234,13 @@ export default function MaterialViewPage() {
       return <PdfViewer fileUrl={url} />;
     }
     if (ext === 'docx') {
-      return <DocxViewer fileUrl={url} />;
+      // If fileUrl is available, fetch and render; otherwise fall back to stored content
+      if (url) {
+        return <DocxViewer fileUrl={url} />;
+      }
+      if (material.content) {
+        return <TextViewer text={material.content} type="docx" />;
+      }
     }
     if (['txt', 'md', 'markdown'].includes(ext)) {
       return <TextViewer text={material.content || '【此文件暂无文本内容】'} type={ext} />;
