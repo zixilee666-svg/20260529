@@ -364,58 +364,6 @@ export default function GalleryPage() {
           </Button>
         </motion.div>
 
-        {/* Search + Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card className="border-0 shadow-lg bg-white/80 dark:bg-primary-800/80 backdrop-blur-sm">
-            <CardContent className="pt-5 pb-4">
-              <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary-400" />
-                  <Input
-                    placeholder={viewMode === 'spaces' ? '搜索学者、机构、研究领域...' : '搜索项目名称、研究者...'}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-10 h-11 text-base"
-                  />
-                </div>
-                {viewMode === 'spaces' && (
-                  <>
-                    <Select value={field || 'all'} onValueChange={handleFieldChange}>
-                      <SelectTrigger className="w-full sm:w-[180px] h-11">
-                        <SelectValue placeholder="研究领域" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">全部领域</SelectItem>
-                        <SelectItem value="graph-neural-network">图神经网络</SelectItem>
-                        <SelectItem value="natural-language-processing">自然语言处理</SelectItem>
-                        <SelectItem value="computer-vision">计算机视觉</SelectItem>
-                        <SelectItem value="reinforcement-learning">强化学习</SelectItem>
-                        <SelectItem value="fraud-detection">欺诈检测</SelectItem>
-                        <SelectItem value="recommendation-system">推荐系统</SelectItem>
-                        <SelectItem value="knowledge-graph">知识图谱</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={sort} onValueChange={handleSortChange}>
-                      <SelectTrigger className="w-full sm:w-[160px] h-11">
-                        <SelectValue placeholder="排序方式" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="popularity">🔥 最受欢迎</SelectItem>
-                        <SelectItem value="recent">🕐 最近活跃</SelectItem>
-                        <SelectItem value="papers">📚 文献最多</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
-              </form>
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* Results */}
         <div className="mt-8">
           {loading ? (
