@@ -746,6 +746,24 @@ export default function JoanLearningGNN() {
           {/* ===== 白贞德侧粒子 ===== */}
           <ParticlesCanvas side="white" />
 
+          {/* ===== 辅助角色（环绕主体）===== */}
+          {/* Archer泳装贞德 - 上方偏左 */}
+          <div className="absolute" style={{ left: '8%', top: '2%', width: '18%', height: '28%', zIndex: 18, opacity: 0.75 }}>
+            <ArcherJeanneSvg />
+          </div>
+          {/* Berserker泳装黑贞 - 上方偏右 */}
+          <div className="absolute" style={{ right: '8%', top: '2%', width: '18%', height: '28%', zIndex: 18, opacity: 0.75 }}>
+            <BerserkerJeanneAlterSvg />
+          </div>
+          {/* Alter Santa Lily - 下方中央 */}
+          <div className="absolute" style={{ left: 'calc(50% - 9%)', bottom: '2%', width: '18%', height: '28%', zIndex: 18, opacity: 0.75 }}>
+            <AlterSantaLilySvg />
+          </div>
+          {/* 幼贞德Santa Lily - 左下方 */}
+          <div className="absolute" style={{ left: '3%', bottom: '5%', width: '16%', height: '26%', zIndex: 18, opacity: 0.75 }}>
+            <YoungJeanneSantaSvg />
+          </div>
+
           {/* ===== GNN知识节点（SVG覆盖层）===== */}
           <svg viewBox="0 0 1000 500" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 10 }} xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -775,20 +793,76 @@ export default function JoanLearningGNN() {
                 />
               ));
             })}
-            {/* 节点间连线（同类实线） */}
-            {/* 简化：绘制几根代表性连线 */}
-            <line x1="320" y1="140" x2="400" y2="160" stroke="#F4D03F" strokeWidth="0.8" opacity="0.3" strokeDasharray="4,4">
-              <animate attributeName="stroke-dashoffset" values="0;8" dur="1s" repeatCount="indefinite" />
-            </line>
-            <line x1="450" y1="180" x2="520" y2="200" stroke="#3498DB" strokeWidth="0.8" opacity="0.3" strokeDasharray="4,4">
-              <animate attributeName="stroke-dashoffset" values="0;8" dur="1.2s" repeatCount="indefinite" />
-            </line>
-            <line x1="380" y1="240" x2="440" y2="260" stroke="#2ECC71" strokeWidth="0.8" opacity="0.3" strokeDasharray="4,4">
-              <animate attributeName="stroke-dashoffset" values="0;8" dur="0.9s" repeatCount="indefinite" />
-            </line>
-            <line x1="340" y1="220" x2="420" y2="240" stroke="#9B59B6" strokeWidth="0.8" opacity="0.3" strokeDasharray="4,4">
-              <animate attributeName="stroke-dashoffset" values="0;8" dur="1.1s" repeatCount="indefinite" />
-            </line>
+            {/* ═══ 节点间连线 + 流动光点粒子 ═══ */}
+            {/* 同类别连接：金色GNN类别 */}
+            <g className="connection-group">
+              <line x1="300" y1="120" x2="380" y2="150" stroke="#F4D03F" strokeWidth="1.2" opacity="0.6" strokeDasharray="3,12">
+                <animate attributeName="stroke-dashoffset" values="0;15" dur="1.5s" repeatCount="indefinite" />
+              </line>
+              <circle r="2.5" fill="#FFD700" opacity="0.9">
+                <animateMotion path="M300,120 L380,150" dur="1.5s" repeatCount="indefinite" />
+              </circle>
+              <line x1="380" y1="150" x2="440" y2="130" stroke="#F4D03F" strokeWidth="1.2" opacity="0.6" strokeDasharray="3,12">
+                <animate attributeName="stroke-dashoffset" values="0;15" dur="1.8s" repeatCount="indefinite" />
+              </line>
+              <circle r="2.5" fill="#FFD700" opacity="0.9">
+                <animateMotion path="M380,150 L440,130" dur="1.8s" repeatCount="indefinite" />
+              </circle>
+            </g>
+            {/* 损失函数连接：蓝色 */}
+            <g className="connection-group">
+              <line x1="520" y1="170" x2="580" y2="190" stroke="#3498DB" strokeWidth="1.2" opacity="0.6" strokeDasharray="3,12">
+                <animate attributeName="stroke-dashoffset" values="0;15" dur="1.6s" repeatCount="indefinite" />
+              </line>
+              <circle r="2.5" fill="#85C1E9" opacity="0.9">
+                <animateMotion path="M520,170 L580,190" dur="1.6s" repeatCount="indefinite" />
+              </circle>
+              <line x1="580" y1="190" x2="640" y2="175" stroke="#3498DB" strokeWidth="1.2" opacity="0.6" strokeDasharray="3,12">
+                <animate attributeName="stroke-dashoffset" values="0;15" dur="1.4s" repeatCount="indefinite" />
+              </line>
+              <circle r="2.5" fill="#85C1E9" opacity="0.9">
+                <animateMotion path="M580,190 L640,175" dur="1.4s" repeatCount="indefinite" />
+              </circle>
+            </g>
+            {/* 数据集连接：绿色 */}
+            <g className="connection-group">
+              <line x1="460" y1="280" x2="520" y2="300" stroke="#2ECC71" strokeWidth="1.2" opacity="0.6" strokeDasharray="3,12">
+                <animate attributeName="stroke-dashoffset" values="0;15" dur="1.7s" repeatCount="indefinite" />
+              </line>
+              <circle r="2.5" fill="#82E0AA" opacity="0.9">
+                <animateMotion path="M460,280 L520,300" dur="1.7s" repeatCount="indefinite" />
+              </circle>
+            </g>
+            {/* 基础知识连接：紫色 */}
+            <g className="connection-group">
+              <line x1="400" y1="250" x2="460" y2="270" stroke="#9B59B6" strokeWidth="1.2" opacity="0.6" strokeDasharray="3,12">
+                <animate attributeName="stroke-dashoffset" values="0;15" dur="1.3s" repeatCount="indefinite" />
+              </line>
+              <circle r="2.5" fill="#D2B4DE" opacity="0.9">
+                <animateMotion path="M400,250 L460,270" dur="1.3s" repeatCount="indefinite" />
+              </circle>
+            </g>
+            {/* 跨类别连接：白色虚线（知识传递） */}
+            <g className="cross-category-lines">
+              <line x1="440" y1="130" x2="520" y2="170" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" strokeDasharray="2,16" opacity="0.4">
+                <animate attributeName="stroke-dashoffset" values="0;18" dur="2s" repeatCount="indefinite" />
+              </line>
+              <circle r="2" fill="rgba(255,255,255,0.7)">
+                <animateMotion path="M440,130 L520,170" dur="2s" repeatCount="indefinite" />
+              </circle>
+              <line x1="520" y1="170" x2="460" y2="280" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" strokeDasharray="2,16" opacity="0.4">
+                <animate attributeName="stroke-dashoffset" values="0;18" dur="2.2s" repeatCount="indefinite" />
+              </line>
+              <circle r="2" fill="rgba(255,255,255,0.7)">
+                <animateMotion path="M520,170 L460,280" dur="2.2s" repeatCount="indefinite" />
+              </circle>
+              <line x1="640" y1="175" x2="460" y2="270" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" strokeDasharray="2,16" opacity="0.4">
+                <animate attributeName="stroke-dashoffset" values="0;18" dur="1.9s" repeatCount="indefinite" />
+              </line>
+              <circle r="2" fill="rgba(255,255,255,0.7)">
+                <animateMotion path="M640,175 L460,270" dur="1.9s" repeatCount="indefinite" />
+              </circle>
+            </g>
           </svg>
 
         </div>
