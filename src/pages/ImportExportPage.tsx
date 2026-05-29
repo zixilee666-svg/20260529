@@ -135,12 +135,21 @@ export default function ImportExportPage() {
     } catch (err: any) {
       console.error('[Import] Search error:', err);
       const msg = err.message || '';
+
+      // 降级到演示数据（catch 块之前缺失此逻辑，导致空白页）
+      const fallbackResults: SearchResult[] = [
+        { id: 's1', title: `Graph Neural Networks for ${searchQuery}: A Comprehensive Study`, authors: ['Alice Smith', 'Bob Johnson'], year: 2024, venue: 'NeurIPS', abstract: `This paper presents a comprehensive study of GNN applications in ${searchQuery}...`, citations: 45, source: searchSource === 'arxiv' ? 'arXiv (Demo)' : 'Semantic Scholar (Demo)', _isDemo: true },
+        { id: 's2', title: `Heterogeneous ${searchQuery} Detection via Attention Mechanism`, authors: ['Carol Williams', 'David Brown'], year: 2024, venue: 'KDD', abstract: `We propose a novel attention mechanism for ${searchQuery} detection...`, citations: 23, source: searchSource === 'arxiv' ? 'arXiv (Demo)' : 'Semantic Scholar (Demo)', _isDemo: true },
+        { id: 's3', title: `Dynamic Graph Learning for ${searchQuery} Analysis`, authors: ['Eve Davis', 'Frank Miller'], year: 2023, venue: 'ICLR', abstract: `A temporal approach to ${searchQuery} using dynamic GNN...`, citations: 67, source: searchSource === 'arxiv' ? 'arXiv (Demo)' : 'Semantic Scholar (Demo)', _isDemo: true },
+      ];
+      setSearchResults(fallbackResults);
+
       if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('限流') || msg.includes('频繁')) {
-        toast.error('搜索频率受限，请等待 20-30 秒后重试');
+        toast.error('搜索频率受限（已展示演示数据），请等待 20-30 秒后重试');
       } else if (msg.includes('502') || msg.includes('EXTERNAL_API_ERROR')) {
-        toast.error('外部学术服务暂不可用，请稍后重试');
+        toast.error('外部学术服务暂不可用，已为您展示演示数据');
       } else {
-        toast.error(`搜索失败：${msg || '请重试'}`);
+        toast.error(`外部 API 暂不可用：${msg || '请重试'}。已展示演示数据`);
       }
     } finally {
       setIsSearching(false);
