@@ -24,8 +24,10 @@ function corsHeaders(request) {
   };
 }
 
+const CLOUD_FN_VERSION = 'v2-diag-20260529'; // 诊断版本标记
+
 function successJson(data, message = 'Success') {
-  const body = { success: true, data, Message: message };
+  const body = { success: true, data, Message: message, _version: CLOUD_FN_VERSION };
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
@@ -33,11 +35,25 @@ function successJson(data, message = 'Success') {
 }
 
 function errorJson(message, status = 502) {
-  const body = { success: false, data: [], Message: message };
+  const body = { success: false, data: [], Message: message, _version: CLOUD_FN_VERSION };
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
+}
+
+/** 安全 AbortSignal：兼容 EdgeOne 可能不支持的 AbortSignal.timeout */
+function safeTimeoutSignal(ms) {
+  // 优先使用原生 API（Node.js 18+ / 现代运行时）
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  // 兼容回退：手动 AbortController + setTimeout
+  const controller = new AbortController();
+  setTimeout(() => {
+    try { controller.abort(); } catch (_) { /* ignore */ }
+  }, ms);
+  return controller.signal;
 }
 
 // ============================================================
@@ -55,23 +71,28 @@ async function handleSearchArxiv(request) {
 
   try {
     const arxivUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=${start}&max_results=${maxResults}`;
-    console.log('[Search-Arxiv] Fetching:', arxivUrl);
 
     const res = await fetch(arxivUrl, {
       method: 'GET',
       headers: { 'User-Agent': 'AcademicHub/1.1 (mailto:research@academichub.local)' },
-      signal: AbortSignal.timeout(15000),
+      signal: safeTimeoutSignal(30000),
     });
 
     if (!res.ok) {
-      console.error('[Search-Arxiv] HTTP error:', res.status, res.statusText);
-      return successJson({ data: [], total: 0, offset: start, limit: maxResults },
-        `arXiv API 返回状态码 ${res.status}，请稍后重试`);
+      return successJson(
+        { data: [], total: 0, offset: start, limit: maxResults,
+          _diag: { stage: 'fetch_error', status: res.status, statusText: res.statusText } },
+        `[v2] arXiv HTTP ${res.status}: ${res.statusText}`);
     }
 
     const xml = await res.text();
-    if (!xml.includes('<entry>')) {
-      return successJson({ data: [], total: 0, offset: start, limit: maxResults }, 'No results found');
+    const xmlLen = xml.length;
+    const hasEntry = xml.includes('<entry>');
+    if (!hasEntry) {
+      return successJson(
+        { data: [], total: 0, offset: start, limit: maxResults,
+          _diag: { stage: 'no_entry', xmlLength: xmlLen, xmlPreview: xml.substring(0, 300) } },
+        `[v2] 无结果: XML长度=${xmlLen}, 含entry=${hasEntry}`);
     }
 
     // Parse totalResults
@@ -123,11 +144,14 @@ async function handleSearchArxiv(request) {
       });
     }
 
-    return successJson({ data: entries, total, offset: start, limit: maxResults });
+    return successJson({ data: entries, total, offset: start, limit: maxResults },
+      `[v2] 成功: 找到 ${entries.length} 条, total=${total}`);
+
   } catch (e) {
-    console.error('[Search-Arxiv] Exception:', e.message);
-    return successJson({ data: [], total: 0, offset: start, limit: maxResults },
-      `arXiv 搜索异常: ${e.message}`);
+    return successJson(
+      { data: [], total: 0, offset: start, limit: maxResults,
+        _diag: { stage: 'exception', name: e.name, message: e.message } },
+      `[v2] arXiv 异常: ${e.name}=${e.message}`);
   }
 }
 
@@ -152,7 +176,6 @@ async function handleSearchSemanticScholar(request) {
       'url', 'openAccessPdf', 'isOpenAccess', 'tldr', 'publicationTypes',
     ].join(',');
     const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&fields=${fields}&limit=${limit}&offset=${offset}`;
-    console.log('[Search-SS] Fetching:', ssUrl);
 
     const headers = { 'Accept': 'application/json' };
     if (apiKey) headers['x-api-key'] = apiKey;
@@ -160,16 +183,15 @@ async function handleSearchSemanticScholar(request) {
     const res = await fetch(ssUrl, {
       method: 'GET',
       headers,
-      signal: AbortSignal.timeout(15000),
+      signal: safeTimeoutSignal(30000),
     });
 
     if (!res.ok) {
-      console.error('[Search-SS] HTTP error:', res.status, res.statusText);
       if (res.status === 429) {
-        return errorJson('请求过于频繁，请等待 10-20 秒后重试', 429);
+        return errorJson('[v2] 请求过于频繁，请等待 10-20 秒后重试', 429);
       }
       return successJson({ data: [], total: 0, offset, limit, next: null },
-        `Semantic Scholar API 返回状态码 ${res.status}，请稍等后重试`);
+        `[v2] SS API HTTP ${res.status}: ${res.statusText}`);
     }
 
     const data = await res.json();
@@ -192,11 +214,11 @@ async function handleSearchSemanticScholar(request) {
     }));
 
     const nextOffset = data.next || null;
-    return successJson({ data: papers, total: data.total || papers.length, offset, limit, next: nextOffset });
+    return successJson({ data: papers, total: data.total || papers.length, offset, limit, next: nextOffset },
+      `[v2] SS 成功: ${papers.length} 条`);
   } catch (e) {
-    console.error('[Search-SS] Exception:', e.message);
     return successJson({ data: [], total: 0, offset, limit, next: null },
-      `Semantic Scholar 搜索异常: ${e.message}`);
+      `[v2] SS 异常: ${e.name}=${e.message}`);
   }
 }
 
