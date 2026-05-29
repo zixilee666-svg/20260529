@@ -7,21 +7,21 @@ import { useNavigate } from 'react-router-dom';
 // ========================================
 
 const NODE_LINKS: Record<string, string> = {
-  GCN: '/knowledge?topic=GCN',
-  GAT: '/knowledge?topic=GAT',
-  GraphSAGE: '/knowledge?topic=GraphSAGE',
-  GIN: '/knowledge?topic=GIN',
-  'CrossEntropy': '/knowledge?topic=CrossEntropy',
-  Contrastive: '/knowledge?topic=ContrastiveLoss',
-  Triplet: '/knowledge?topic=TripletLoss',
-  Cora: '/knowledge?topic=CoraDataset',
-  PubMed: '/knowledge?topic=PubMedDataset',
-  Reddit: '/knowledge?topic=RedditDataset',
-  'MessagePassing': '/knowledge?topic=MessagePassing',
-  Aggregation: '/knowledge?topic=Aggregation',
-  Embedding: '/knowledge?topic=NodeEmbedding',
-  Attention: '/knowledge?topic=AttentionMechanism',
-  Spectral: '/knowledge?topic=SpectralGraph',
+  GCN: '/dashboard/knowledge?topic=GCN',
+  GAT: '/dashboard/knowledge?topic=GAT',
+  GraphSAGE: '/dashboard/knowledge?topic=GraphSAGE',
+  GIN: '/dashboard/knowledge?topic=GIN',
+  'CrossEntropy': '/dashboard/knowledge?topic=CrossEntropy',
+  Contrastive: '/dashboard/knowledge?topic=ContrastiveLoss',
+  Triplet: '/dashboard/knowledge?topic=TripletLoss',
+  Cora: '/dashboard/knowledge?topic=CoraDataset',
+  PubMed: '/dashboard/knowledge?topic=PubMedDataset',
+  Reddit: '/dashboard/knowledge?topic=RedditDataset',
+  'MessagePassing': '/dashboard/knowledge?topic=MessagePassing',
+  Aggregation: '/dashboard/knowledge?topic=Aggregation',
+  Embedding: '/dashboard/knowledge?topic=NodeEmbedding',
+  Attention: '/dashboard/knowledge?topic=AttentionMechanism',
+  Spectral: '/dashboard/knowledge?topic=SpectralGraph',
 };
 
 interface KnowledgeNode {
@@ -418,7 +418,7 @@ export default function JoanLearningGNN() {
               fontSize={fontSize}
               isHovered={hoveredNode === node.id}
               onHover={setHoveredNode}
-              onClick={() => navigate(NODE_LINKS[node.label] || '/knowledge')}
+              onClick={() => navigate(NODE_LINKS[node.label] || '/dashboard/knowledge')}
             />
           );
         })}
@@ -431,12 +431,11 @@ export default function JoanLearningGNN() {
           transition: filter 0.3s ease;
         }
         .node-visual {
-          transition: transform 0.25s ease, filter 0.3s ease;
-          transform-origin: center;
+          transition: filter 0.3s ease;
         }
+        /* hover 效果：仅用 filter，避免 transform 与 JS 轨道动画的 setAttribute('transform') 冲突导致抖动 */
         .knowledge-node-group:hover .node-visual {
-          transform: scale(1.15);
-          filter: brightness(1.2) drop-shadow(0 0 12px rgba(255,215,0,0.5));
+          filter: brightness(1.35) drop-shadow(0 0 16px rgba(255,215,0,0.65));
         }
         @media (prefers-reduced-motion: reduce) {
           .knowledge-node-group,

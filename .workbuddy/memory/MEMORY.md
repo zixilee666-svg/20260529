@@ -17,7 +17,7 @@
 - **Zustand Persist**: authStore persists token+user; all consumers use `parseStoredUser()`/`parseStoredToken()` helpers
 - **AuthContext**: Rewritten to use Zustand store (no direct localStorage)
 - **E2E**: 42 tests, `workers: 1` (multi-worker localStorage race condition)
-- **EdgeOne Deploy**: Deploy `./dist` only, NOT project root (avoids Edge Functions build failure)
+- **EdgeOne Deploy**: Push to GitHub → EdgeOne Pages Git 自动部署（2026-05-29 起，不再手动 `edgeone pages deploy`）
 - **GitHub**: https://github.com/zixilee666-svg/Joan-academic-hub.git (branch: main)
 
 ## Real Backend Mode (2026-05-26)
