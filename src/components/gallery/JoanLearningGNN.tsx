@@ -820,6 +820,8 @@ export default function JoanLearningGNN() {
               }}
               style={{ cursor: 'pointer' }}
             >
+              {/* 内层视觉组 — hover缩放在此层，不影响外层位置 */}
+              <g className="node-visual">
               {/* 发光底层 */}
               <g filter={`url(#${filterId})`}>
                 {renderNodeShape(node.type, size)}
@@ -844,8 +846,9 @@ export default function JoanLearningGNN() {
               >
                 {node.label.length > 10 ? node.labelCn || node.label : node.label}
               </text>
+              </g>
 
-              {/* Tooltip */}
+              {/* Tooltip — 放在内层外面避免被缩放影响 */}
               {hoveredNode === node.id && (
                 <g transform={`translate(0, ${-size - 22})`}>
                   <rect x={-65} y="-19" width={130} height="26" rx="5"
@@ -939,9 +942,13 @@ export default function JoanLearningGNN() {
       {/* CSS样式注入 */}
       <style>{`
         .knowledge-node-group {
-          transition: transform 0.25s ease, filter 0.3s ease;
+          transition: filter 0.3s ease;
         }
-        .knowledge-node-group:hover {
+        .node-visual {
+          transition: transform 0.25s ease, filter 0.3s ease;
+          transform-origin: center;
+        }
+        .knowledge-node-group:hover .node-visual {
           transform: scale(1.15);
           filter: brightness(1.2) drop-shadow(0 0 12px rgba(255,215,0,0.5));
         }
@@ -949,6 +956,9 @@ export default function JoanLearningGNN() {
           .knowledge-node-group,
           [data-orbit-node] {
             animation: none !important;
+            transition: none !important;
+          }
+          .node-visual {
             transition: none !important;
           }
         }
