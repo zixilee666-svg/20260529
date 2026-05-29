@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // ========================================
@@ -75,6 +75,96 @@ const ORBITS = [
 const CHAR_CENTER_Y = 260;
 const ORBIT_CENTER_Y = 220;
 
+// ========================================
+// OrbitNode — React.memo 包裹，阻止 hover 状态变化时全体重渲染
+// 仅被 hover 的单个节点会重渲染（显示 tooltip），其余节点不受影响
+// ========================================
+const OrbitNode = memo(
+  function OrbitNode({
+    node,
+    size,
+    fontSize,
+    isHovered,
+    onHover,
+    onClick,
+  }: {
+    node: KnowledgeNode;
+    size: number;
+    fontSize: number;
+    isHovered: boolean;
+    onHover: (id: string | null) => void;
+    onClick: () => void;
+  }) {
+    const cfg = TYPE_CONFIG[node.type];
+    const filterId = `node-glow-${node.type}`;
+
+    const renderShape = (t: KnowledgeNode['type'], s: number) => {
+      switch (TYPE_CONFIG[t].shape) {
+        case 'hex':
+          return <polygon points={`0,-${s} ${s*0.866},-${s*0.5} ${s*0.866},${s*0.5} 0,${s} -${s*0.866},${s*0.5} -${s*0.866},-${s*0.5}`} />;
+        case 'circle':
+          return <circle r={s} />;
+        case 'rect':
+          return <rect x={-s} y={-s * 0.65} width={s * 2} height={s * 1.3} rx={5} />;
+        case 'diamond':
+          return <polygon points={`0,-${s} ${s},0 0,${s} -${s},0`} />;
+      }
+    };
+
+    return (
+      <g
+        data-orbit-node
+        data-orbit-index={node.orbitIndex}
+        data-angle-offset={node.angleOffset}
+        data-speed={node.speed}
+        className="knowledge-node-group"
+        onMouseEnter={() => onHover(node.id)}
+        onMouseLeave={() => onHover(null)}
+        onClick={onClick}
+        style={{ cursor: 'pointer' }}
+      >
+        <g className="node-visual">
+          {/* 发光底层 */}
+          <g filter={`url(#${filterId})`}>{renderShape(node.type, size)}</g>
+          {/* 本体 */}
+          <g>{renderShape(node.type, size)}</g>
+          {/* 描边 */}
+          <g fill="none" stroke={cfg.stroke} strokeWidth="1.8">
+            {renderShape(node.type, size)}
+          </g>
+          {/* 文字标签 */}
+          <text
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill={cfg.text}
+            fontSize={fontSize}
+            fontWeight="bold"
+            fontFamily="'Inter', 'Noto Sans SC', sans-serif"
+            pointerEvents="none"
+            y={node.type === 'rect' ? 1 : 0}
+          >
+            {node.label.length > 10 ? node.labelCn || node.label : node.label}
+          </text>
+        </g>
+        {/* Tooltip — 仅当前节点被 hover 时渲染 */}
+        {isHovered && (
+          <g transform={`translate(0, ${-size - 22})`}>
+            <rect x={-65} y="-19" width={130} height="26" rx="5"
+              fill="rgba(20,20,30,0.93)" stroke={cfg.fill} strokeWidth="1.2"/>
+            <text textAnchor="middle" y="2" fill="white" fontSize="12"
+              fontFamily="'Inter', sans-serif" fontWeight="500">
+              {node.labelCn ? `${node.labelCn} (${node.label})` : node.label}
+            </text>
+            <polygon points="-5,8 5,8 0,15" fill="rgba(20,20,30,0.93)"/>
+          </g>
+        )}
+      </g>
+    );
+  },
+  // 自定义比较：仅当 isHovered 或 node.id 变化时才重渲染
+  (prev, next) => prev.node.id === next.node.id && prev.isHovered === next.isHovered,
+);
+
 export default function JoanLearningGNN() {
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -82,6 +172,26 @@ export default function JoanLearningGNN() {
   const [reducedMotion] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
+
+  // 一次性设置节点初始位置（避免 React 控制 transform 导致 hover 跳动）
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const nodeGroups = svg.querySelectorAll('[data-orbit-node]');
+    nodeGroups.forEach((g) => {
+      const el = g as SVGGElement;
+      // 避免覆盖动画已设置的位置
+      if (el.getAttribute('data-init')) return;
+      const orbitIdx = parseInt(el.dataset.orbitIndex || '0');
+      const offset = parseFloat(el.dataset.angleOffset || '0');
+      const orbit = ORBITS[orbitIdx] || ORBITS[0];
+      const rad = (offset * Math.PI) / 180;
+      const cx = 600 + orbit.rx * Math.cos(rad);
+      const cy = ORBIT_CENTER_Y + orbit.ry * Math.sin(rad);
+      el.setAttribute('transform', `translate(${cx}, ${cy})`);
+      el.setAttribute('data-init', 'true');
+    });
+  }, []);
 
   // JS驱动轨道运动
   useEffect(() => {
@@ -117,20 +227,6 @@ export default function JoanLearningGNN() {
 
     return () => cancelAnimationFrame(animId);
   }, [reducedMotion]);
-
-  const renderNodeShape = (type: KnowledgeNode['type'], size: number) => {
-    const config = TYPE_CONFIG[type];
-    switch (config.shape) {
-      case 'hex':
-        return <polygon points={`0,-${size} ${size*0.866},-${size*0.5} ${size*0.866},${size*0.5} 0,${size} -${size*0.866},${size*0.5} -${size*0.866},-${size*0.5}`} />;
-      case 'circle':
-        return <circle r={size} />;
-      case 'rect':
-        return <rect x={-size} y={-size * 0.65} width={size * 2} height={size * 1.3} rx={5} />;
-      case 'diamond':
-        return <polygon points={`0,-${size} ${size},0 0,${size} -${size},0`} />;
-    }
-  };
 
   return (
     <div style={{
@@ -791,78 +887,21 @@ export default function JoanLearningGNN() {
           </g>
         </g>
 
-        {/* ════════ 第4层：知识节点（轨道运动） ════════ */}
-        {KNOWLEDGE_NODES.map((node) => {
-          const cfg = TYPE_CONFIG[node.type];
-          const size = [34, 28, 24][node.orbitIndex];
-          const fontSize = [15, 13, 12][node.orbitIndex];
-          const filterId = `node-glow-${node.type}`;
-
-          const orbit = ORBITS[node.orbitIndex];
-          const rad = (node.angleOffset * Math.PI) / 180;
-          const staticX = 600 + orbit.rx * Math.cos(rad);
-          const staticY = ORBIT_CENTER_Y + orbit.ry * Math.sin(rad);
-
-          return (
-            <g
-              key={node.id}
-              data-orbit-node
-              data-orbit-index={node.orbitIndex}
-              data-angle-offset={node.angleOffset}
-              data-speed={node.speed}
-              transform={`translate(${staticX}, ${staticY})`}
-              className="knowledge-node-group"
-              onMouseEnter={() => setHoveredNode(node.id)}
-              onMouseLeave={() => setHoveredNode(null)}
-              onClick={() => {
-                const link = NODE_LINKS[node.label];
-                if (link) navigate(link);
-              }}
-              style={{ cursor: 'pointer' }}
-            >
-              {/* 内层视觉组 — hover缩放在此层，不影响外层位置 */}
-              <g className="node-visual">
-              {/* 发光底层 */}
-              <g filter={`url(#${filterId})`}>
-                {renderNodeShape(node.type, size)}
-              </g>
-              {/* 本体 */}
-              <g>{renderNodeShape(node.type, size)}</g>
-              {/* 描边 */}
-              <g fill="none" stroke={cfg.stroke} strokeWidth="1.8">
-                {renderNodeShape(node.type, size)}
-              </g>
-
-              {/* 文字标签 */}
-              <text
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill={cfg.text}
-                fontSize={fontSize}
-                fontWeight="bold"
-                fontFamily="'Inter', 'Noto Sans SC', sans-serif"
-                pointerEvents="none"
-                y={node.type === 'rect' ? 1 : 0}
-              >
-                {node.label.length > 10 ? node.labelCn || node.label : node.label}
-              </text>
-              </g>
-
-              {/* Tooltip — 放在内层外面避免被缩放影响 */}
-              {hoveredNode === node.id && (
-                <g transform={`translate(0, ${-size - 22})`}>
-                  <rect x={-65} y="-19" width={130} height="26" rx="5"
-                    fill="rgba(20,20,30,0.93)" stroke={cfg.fill} strokeWidth="1.2"/>
-                  <text textAnchor="middle" y="2" fill="white" fontSize="12"
-                    fontFamily="'Inter', sans-serif" fontWeight="500">
-                    {node.labelCn ? `${node.labelCn} (${node.label})` : node.label}
-                  </text>
-                  <polygon points="-5,8 5,8 0,15" fill="rgba(20,20,30,0.93)"/>
-                </g>
-              )}
-            </g>
-          );
-        })}
+        {/* ════════ 第4层：知识节点（轨道运动 · React.memo 防跳动） ════════ */}
+        {KNOWLEDGE_NODES.map((node) => (
+          <OrbitNode
+            key={node.id}
+            node={node}
+            size={[34, 28, 24][node.orbitIndex]}
+            fontSize={[15, 13, 12][node.orbitIndex]}
+            isHovered={hoveredNode === node.id}
+            onHover={setHoveredNode}
+            onClick={() => {
+              const link = NODE_LINKS[node.label];
+              if (link) navigate(link);
+            }}
+          />
+        ))}
 
         {/* ════════ 第5层：粒子效果 ════════ */}
         {!reducedMotion && (
