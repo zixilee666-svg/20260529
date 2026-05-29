@@ -5,9 +5,11 @@
  * - Edge Function (V8 isolate) 无法访问外部网络（fetch 外部域名会 net_exception_timeout）
  * - Cloud Function (Node.js) 可以正常访问外部 API
  *
- * 路由（使用 /api-external/ 前缀避免与 Edge Function 的 /api/(.*) 冲突）：
- *   GET /api-external/search/arxiv?query=...&start=...&max_results=...
- *   GET /api-external/search/semantic-scholar?query=...&offset=...&limit=...&apiKey=...
+ * 路由：
+ *   GET /api/search/arxiv?query=...&start=...&max_results=...
+ *   GET /api/search/semantic-scholar?query=...&offset=...&limit=...&apiKey=...
+ *
+ * 注意：此文件为旧路径备份，主要功能在 api-external/search/[[default]].js
  */
 
 // ============================================================
@@ -24,7 +26,7 @@ function corsHeaders(request) {
   };
 }
 
-const CLOUD_FN_VERSION = 'v2-diag-20260529'; // 诊断版本标记
+const CLOUD_FN_VERSION = 'v3-retry-20260529'; // 重试版
 
 function successJson(data, message = 'Success') {
   const body = { success: true, data, Message: message, _version: CLOUD_FN_VERSION };
@@ -56,6 +58,52 @@ function safeTimeoutSignal(ms) {
   return controller.signal;
 }
 
+/** 延迟工具函数 */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** 通用 fetch + 重试（处理 429 限流 + 5xx 服务端错误） */
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, { ...options, signal: safeTimeoutSignal(25000) });
+
+      // 429 → 指数退避重试
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '0', 10);
+        const waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(2000 * Math.pow(2, attempt), 16000);
+        if (attempt < maxRetries) {
+          console.log(`[CF] 429 rate-limited, attempt ${attempt + 1}/${maxRetries + 1}, waiting ${waitMs}ms...`);
+          await sleep(waitMs);
+          continue;
+        }
+      }
+
+      // 5xx → 退避重试
+      if (res.status >= 500 && attempt < maxRetries) {
+        const waitMs = 1000 * Math.pow(2, attempt);
+        console.log(`[CF] ${res.status} error, attempt ${attempt + 1}/${maxRetries + 1}, waiting ${waitMs}ms...`);
+        await sleep(waitMs);
+        continue;
+      }
+
+      return res;
+    } catch (e) {
+      lastError = e;
+      if (attempt < maxRetries && (e.name === 'TimeoutError' || e.message?.includes('timeout'))) {
+        const waitMs = 1000 * Math.pow(2, attempt);
+        console.log(`[CF] network error, attempt ${attempt + 1}/${maxRetries + 1}, waiting ${waitMs}ms...`);
+        await sleep(waitMs);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastError || new Error('Max retries exceeded');
+}
+
 // ============================================================
 // arXiv 搜索
 // ============================================================
@@ -72,17 +120,16 @@ async function handleSearchArxiv(request) {
   try {
     const arxivUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=${start}&max_results=${maxResults}`;
 
-    const res = await fetch(arxivUrl, {
+    const res = await fetchWithRetry(arxivUrl, {
       method: 'GET',
-      headers: { 'User-Agent': 'AcademicHub/1.1 (mailto:research@academichub.local)' },
-      signal: safeTimeoutSignal(30000),
+      headers: { 'User-Agent': 'AcademicHub/1.2 (mailto:research@academichub.local)' },
     });
 
     if (!res.ok) {
       return successJson(
         { data: [], total: 0, offset: start, limit: maxResults,
           _diag: { stage: 'fetch_error', status: res.status, statusText: res.statusText } },
-        `[v2] arXiv HTTP ${res.status}: ${res.statusText}`);
+        `[v3] arXiv HTTP ${res.status}: ${res.statusText}`);
     }
 
     const resContentType = res.headers.get('content-type') || '';
@@ -94,7 +141,7 @@ async function handleSearchArxiv(request) {
       return successJson(
         { data: [], total: 0, offset: start, limit: maxResults,
           _diag: { stage: 'no_entry', xmlLength: xmlLen, contentType: resContentType, xmlHead } },
-        `[v2] 无结果: XML=${xmlLen}B ContentType=${resContentType} 含entry=${hasEntry} 头部:"${xmlHead}"`);
+        `[v3] 无结果: XML=${xmlLen}B ContentType=${resContentType} 含entry=${hasEntry} 头部:"${xmlHead}"`);
     }
 
     // Parse totalResults
@@ -147,13 +194,13 @@ async function handleSearchArxiv(request) {
     }
 
     return successJson({ data: entries, total, offset: start, limit: maxResults },
-      `[v2] 成功: 找到 ${entries.length} 条, total=${total}`);
+      `[v3] 成功: 找到 ${entries.length} 条, total=${total}`);
 
   } catch (e) {
     return successJson(
       { data: [], total: 0, offset: start, limit: maxResults,
         _diag: { stage: 'exception', name: e.name, message: e.message } },
-      `[v2] arXiv 异常: ${e.name}=${e.message}`);
+      `[v3] arXiv 异常: ${e.name}=${e.message}`);
   }
 }
 
@@ -179,21 +226,23 @@ async function handleSearchSemanticScholar(request) {
     ].join(',');
     const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&fields=${fields}&limit=${limit}&offset=${offset}`;
 
-    const headers = { 'Accept': 'application/json' };
+    const headers = {
+      'Accept': 'application/json',
+      'User-Agent': 'AcademicHub/1.2 (mailto:research@academichub.local)',
+    };
     if (apiKey) headers['x-api-key'] = apiKey;
 
-    const res = await fetch(ssUrl, {
+    const res = await fetchWithRetry(ssUrl, {
       method: 'GET',
       headers,
-      signal: safeTimeoutSignal(30000),
     });
 
     if (!res.ok) {
       if (res.status === 429) {
-        return errorJson('[v2] 请求过于频繁，请等待 10-20 秒后重试', 429);
+        return errorJson('[v3] Semantic Scholar API 限流，所有重试已用尽。请稍后（30-60 秒）再试', 429);
       }
       return successJson({ data: [], total: 0, offset, limit, next: null },
-        `[v2] SS API HTTP ${res.status}: ${res.statusText}`);
+        `[v3] SS API HTTP ${res.status}: ${res.statusText}`);
     }
 
     const data = await res.json();
@@ -217,10 +266,10 @@ async function handleSearchSemanticScholar(request) {
 
     const nextOffset = data.next || null;
     return successJson({ data: papers, total: data.total || papers.length, offset, limit, next: nextOffset },
-      `[v2] SS 成功: ${papers.length} 条`);
+      `[v3] SS 成功: ${papers.length} 条`);
   } catch (e) {
     return successJson({ data: [], total: 0, offset, limit, next: null },
-      `[v2] SS 异常: ${e.name}=${e.message}`);
+      `[v3] SS 异常: ${e.name}=${e.message}`);
   }
 }
 

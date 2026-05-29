@@ -118,25 +118,29 @@ export default function ImportExportPage() {
         }));
       }
 
-      if (results.length === 0 && api.isMock()) {
+      if (results.length === 0) {
+        // Mock fallback: 当 API 无法返回结果时，降级为演示数据
         results = [
-          { id: 's1', title: `Graph Neural Networks for ${searchQuery}: A Comprehensive Study`, authors: ['Alice Smith', 'Bob Johnson'], year: 2024, venue: 'NeurIPS', abstract: `This paper presents a comprehensive study of GNN applications in ${searchQuery}...`, citations: 45, source: searchSource === 'arxiv' ? 'arXiv' : 'Semantic Scholar' },
-          { id: 's2', title: `Heterogeneous ${searchQuery} Detection via Attention Mechanism`, authors: ['Carol Williams', 'David Brown'], year: 2024, venue: 'KDD', abstract: `We propose a novel attention mechanism for ${searchQuery} detection...`, citations: 23, source: searchSource === 'arxiv' ? 'arXiv' : 'Semantic Scholar' },
-          { id: 's3', title: `Dynamic Graph Learning for ${searchQuery} Analysis`, authors: ['Eve Davis', 'Frank Miller'], year: 2023, venue: 'ICLR', abstract: `A temporal approach to ${searchQuery} using dynamic GNN...`, citations: 67, source: searchSource === 'arxiv' ? 'arXiv' : 'Semantic Scholar' },
+          { id: 's1', title: `Graph Neural Networks for ${searchQuery}: A Comprehensive Study`, authors: ['Alice Smith', 'Bob Johnson'], year: 2024, venue: 'NeurIPS', abstract: `This paper presents a comprehensive study of GNN applications in ${searchQuery}...`, citations: 45, source: searchSource === 'arxiv' ? 'arXiv (Demo)' : 'Semantic Scholar (Demo)', _isDemo: true },
+          { id: 's2', title: `Heterogeneous ${searchQuery} Detection via Attention Mechanism`, authors: ['Carol Williams', 'David Brown'], year: 2024, venue: 'KDD', abstract: `We propose a novel attention mechanism for ${searchQuery} detection...`, citations: 23, source: searchSource === 'arxiv' ? 'arXiv (Demo)' : 'Semantic Scholar (Demo)', _isDemo: true },
+          { id: 's3', title: `Dynamic Graph Learning for ${searchQuery} Analysis`, authors: ['Eve Davis', 'Frank Miller'], year: 2023, venue: 'ICLR', abstract: `A temporal approach to ${searchQuery} using dynamic GNN...`, citations: 67, source: searchSource === 'arxiv' ? 'arXiv (Demo)' : 'Semantic Scholar (Demo)', _isDemo: true },
         ];
+        toast.info('外部 API 暂不可用，已为您展示演示数据');
       }
 
       setSearchResults(results);
-      toast.success(`找到 ${searchTotal > 0 ? searchTotal : results.length} 条结果`);
+      if (searchTotal > 0) {
+        toast.success(`找到 ${searchTotal} 条结果`);
+      }
     } catch (err: any) {
       console.error('[Import] Search error:', err);
       const msg = err.message || '';
-      if (msg.includes('429') || msg.includes('Too Many Requests')) {
-        toast.error('搜索频率受限，请稍等 10-20 秒后重试');
+      if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('限流') || msg.includes('频繁')) {
+        toast.error('搜索频率受限，请等待 20-30 秒后重试');
       } else if (msg.includes('502') || msg.includes('EXTERNAL_API_ERROR')) {
         toast.error('外部学术服务暂不可用，请稍后重试');
       } else {
-        toast.error('搜索失败，请重试');
+        toast.error(`搜索失败：${msg || '请重试'}`);
       }
     } finally {
       setIsSearching(false);
