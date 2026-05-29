@@ -385,7 +385,7 @@ export default function JoanLearningGNN() {
         {/* ======== 第3层：Q版贞德（chibi风格图像） ======== */}
         <g id="ruler-jeanne-prayer" transform={`translate(600, ${CHAR_CENTER_Y})`}>
           <image
-            href="/images/jeanne_chibi.jpg"
+            href="/images/jeanne_chibi.png"
             x={-95}
             y={-230}
             width={190}
@@ -403,6 +403,25 @@ export default function JoanLearningGNN() {
             圣女贞德 · 学术守护者
           </text>
         </g>
+
+        {/* ════════ 第4层：知识轨道节点 ════════ */}
+        {KNOWLEDGE_NODES.map((node) => {
+          const orbitIdx = node.orbitIndex;
+          const size = [28, 24, 22][orbitIdx];
+          const fontSize = [13, 12, 11][orbitIdx];
+
+          return (
+            <OrbitNode
+              key={node.id}
+              node={node}
+              size={size}
+              fontSize={fontSize}
+              isHovered={hoveredNode === node.id}
+              onHover={setHoveredNode}
+              onClick={() => navigate(NODE_LINKS[node.label] || '/knowledge')}
+            />
+          );
+        })}
 
       </svg>
 
