@@ -85,14 +85,16 @@ async function handleSearchArxiv(request) {
         `[v2] arXiv HTTP ${res.status}: ${res.statusText}`);
     }
 
+    const resContentType = res.headers.get('content-type') || '';
     const xml = await res.text();
     const xmlLen = xml.length;
     const hasEntry = xml.includes('<entry>');
+    const xmlHead = xml.substring(0, 200).replace(/[\n\r]/g, ' ');
     if (!hasEntry) {
       return successJson(
         { data: [], total: 0, offset: start, limit: maxResults,
-          _diag: { stage: 'no_entry', xmlLength: xmlLen, xmlPreview: xml.substring(0, 300) } },
-        `[v2] 无结果: XML长度=${xmlLen}, 含entry=${hasEntry}`);
+          _diag: { stage: 'no_entry', xmlLength: xmlLen, contentType: resContentType, xmlHead } },
+        `[v2] 无结果: XML=${xmlLen}B ContentType=${resContentType} 含entry=${hasEntry} 头部:"${xmlHead}"`);
     }
 
     // Parse totalResults

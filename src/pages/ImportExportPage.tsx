@@ -29,7 +29,7 @@ import knowledgeGraphLib, { addZoteroPapersToLocalKG } from '@/lib/knowledgeGrap
 export default function ImportExportPage() {
   const [activeTab, setActiveTab] = useState('import');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchSource, setSearchSource] = useState<'arxiv' | 'semantic' | 'zotero'>('arxiv');
+  const [searchSource, setSearchSource] = useState<'arxiv' | 'semantic' | 'zotero'>('semantic');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
