@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jeanne d'Arc · 知识轨道</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --orbit: rgba(180, 160, 200, 0.15);
+    --node-bg: rgba(20, 24, 38, 0.92);
+    --node-border: rgba(180, 160, 200, 0.3);
+    --node-text: #d4c8e8;
+    --node-accent: #c9a04d;
+    --glow: rgba(180, 160, 220, 0.06);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #canvas-container {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+
+  #orbit-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  .orbit-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 0.5px solid var(--orbit);
+    pointer-events: none;
+  }
+
+  .knowledge-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 10;
+    transition: transform 0.3s ease;
+  }
+
+  .knowledge-node:hover {
+    transform: translate(-50%, -50%) scale(1.3);
+    z-index: 100;
+  }
+
+  .knowledge-node .node-core {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--node-bg);
+    border: 1px solid var(--node-border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    transition: all 0.3s ease;
+  }
+
+  .knowledge-node:hover .node-core {
+    border-color: var(--node-accent);
+    box-shadow: 0 0 18px rgba(201, 160, 77, 0.35);
+  }
+
+  .knowledge-node .node-label {
+    position: absolute;
+    white-space: nowrap;
+    font-size: 11px;
+    color: var(--node-text);
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+    text-align: center;
+  }
+
+  .knowledge-node:hover .node-label {
+    opacity: 1;
+    transform: translateY(4px);
+  }
+
+  .knowledge-node .node-label.top { bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+  .knowledge-node .node-label.bottom { top: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+  .knowledge-node .node-label.left { right: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
+  .knowledge-node .node-label.right { left: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
+
+  .knowledge-node:hover .node-label.top { transform: translateX(-50%) translateY(-4px); }
+  .knowledge-node:hover .node-label.bottom { transform: translateX(-50%) translateY(4px); }
+  .knowledge-node:hover .node-label.left { transform: translateY(-50%) translateX(-4px); }
+  .knowledge-node:hover .node-label.right { transform: translateY(-50%) translateX(4px); }
+
+  /* Jeanne SVG container */
+  #jeanne-container {
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    padding: 6px 14px;
+    background: rgba(10, 14, 23, 0.95);
+    border: 0.5px solid var(--node-accent);
+    border-radius: 6px;
+    color: #e8dcc8;
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+    z-index: 200;
+  }
+
+  .tooltip.visible { opacity: 1; }
+
+  /* Title */
+  .title-area {
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .title-area h1 {
+    font-size: 16px;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    color: rgba(200, 180, 220, 0.7);
+  }
+
+  .title-area .subtitle {
+    font-size: 11px;
+    color: rgba(180, 160, 200, 0.4);
+    margin-top: 4px;
+    letter-spacing: 0.1em;
+  }
+
+  /* Bottom hint */
+  .hint-area {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .hint-area span {
+    font-size: 11px;
+    color: rgba(180, 160, 200, 0.35);
+    letter-spacing: 0.05em;
+    animation: hintPulse 3s ease-in-out infinite;
+  }
+
+  @keyframes hintPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 500;
+    display: flex;
+    align-items: center; justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+
+  .modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .modal-card {
+    background: rgba(16, 20, 32, 0.98);
+    border: 0.5px solid rgba(180, 160, 220, 0.25);
+    border-radius: 14px;
+    padding: 32px 36px;
+    max-width: 420px;
+    width: 90%;
+    position: relative;
+    transform: translateY(16px) scale(0.96);
+    transition: transform 0.35s ease;
+  }
+
+  .modal-overlay.active .modal-card {
+    transform: translateY(0) scale(1);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 14px; right: 18px;
+    background: none; border: none;
+    color: rgba(200, 180, 220, 0.5);
+    font-size: 18px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .modal-close:hover { color: rgba(200, 180, 220, 0.9); }
+
+  .modal-icon {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: rgba(201, 160, 77, 0.1);
+    border: 1px solid rgba(201, 160, 77, 0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    margin-bottom: 18px;
+  }
+
+  .modal-card h2 {
+    font-size: 17px;
+    font-weight: 500;
+    color: #e8dcc8;
+    margin-bottom: 8px;
+  }
+
+  .modal-card p {
+    font-size: 13px;
+    color: rgba(200, 180, 220, 0.6);
+    line-height: 1.7;
+    margin-bottom: 20px;
+  }
+
+  .modal-card .btn-row {
+    display: flex; gap: 10px;
+  }
+
+  .modal-card .btn {
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 0.5px solid rgba(180, 160, 220, 0.25);
+    background: rgba(20, 24, 38, 0.8);
+    color: #d4c8e8;
+  }
+
+  .modal-card .btn:hover {
+    border-color: rgba(201, 160, 77, 0.5);
+    background: rgba(201, 160, 77, 0.08);
+  }
+
+  .modal-card .btn.primary {
+    border-color: rgba(201, 160, 77, 0.4);
+    background: rgba(201, 160, 77, 0.12);
+    color: #e8d4a0;
+  }
+
+  .modal-card .btn.primary:hover {
+    border-color: rgba(201, 160, 77, 0.7);
+    background: rgba(201, 160, 77, 0.2);
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <div class="title-area">
+    <h1>Jeanne d'Arc · Knowledge Orbit</h1>
+    <div class="subtitle">RULER / 裁定者 · 知识轨道</div>
+  </div>
+
+  <div class="hint-area">
+    <span>点击轨道节点以探索知识图谱</span>
+  </div>
+
+  <div id="tooltip" class="tooltip"></div>
+
+  <!-- Jeanne SVG illustration -->
+  <div id="jeanne-container"></div>
+
+  <!-- Modal -->
+  <div id="modal-overlay" class="modal-overlay" onclick="closeModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <div id="modal-icon" class="modal-icon"></div>
+      <h2 id="modal-title"></h2>
+      <p id="modal-desc"></p>
+      <div class="btn-row">
+        <button class="btn primary" onclick="enterKnowledgeGraph()">进入知识图谱</button>
+        <button class="btn" onclick="closeModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ---- CONFIG ----
+  const container = document.getElementById('canvas-container');
+  const jeanneContainer = document.getElementById('jeanne-container');
+  const tooltip = document.getElementById('tooltip');
+
+  // Knowledge nodes per orbit
+  const orbitData = [
+    {
+      rx: 160, ry: 110, angle: 15,  speed: 0.00025,
+      nodes: [
+        { label: 'GNN',         icon: '🧬',  desc: '图神经网络基础理论与消息传递框架',      link: '#gnn' },
+        { label: 'GCN',         icon: '🔷',  desc: '图卷积网络：谱域与空域的桥梁',          link: '#gcn' },
+        { label: 'GAT',         icon: '⭐',  desc: '图注意力网络：自适应邻域聚合',          link: '#gat' },
+      ]
+    },
+    {
+      rx: 260, ry: 175, angle: -20, speed: 0.00018,
+      nodes: [
+        { label: '异质图',      icon: '🔄',  desc: '异构图神经网络：多类型节点与边建模',    link: '#hetero' },
+        { label: '元路径',      icon: '🔗',  desc: '元路径设计：捕获高阶语义关系',          link: '#metapath' },
+        { label: '注意力',      icon: '👁️',  desc: '层级注意力：节点级与语义级',            link: '#attention' },
+      ]
+    },
+    {
+      rx: 360, ry: 235, angle: 30,  speed: 0.00013,
+      nodes: [
+        { label: '欺诈检测',    icon: '🛡️',  desc: '图异常检测在金融反欺诈中的应用',        link: '#fraud' },
+        { label: '对比学习',    icon: '⚖️',  desc: '图形对比学习：增强表征鲁棒性',          link: '#contrastive' },
+        { label: '长尾分布',    icon: '📊',  desc: '类别不平衡与概念漂移处理策略',          link: '#longtail' },
+      ]
+    },
+    {
+      rx: 460, ry: 290, angle: -5,  speed: 0.00010,
+      nodes: [
+        { label: 'MTPNet',      icon: '🌐',  desc: '多时序异质图欺诈检测网络',              link: '#mtpnet' },
+        { label: '时序分析',    icon: '⏳',  desc: '时序图构建与动态特征演化建模',          link: '#temporal' },
+        { label: '知识图谱',    icon: '🧠',  desc: '学术知识图谱构建与文献关系挖掘',        link: '#kg' },
+      ]
+    },
+  ];
+
+  // ---- CREATE JEANNE SVG ----
+  function createJeanneSVG() {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const size = 280;
+    const cx = size/2, cy = size/2;
+
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+    svg.setAttribute('width', `${size}`);
+    svg.setAttribute('height', `${size}`);
+
+    // Defs
+    const defs = document.createElementNS(svgNS, 'defs');
+
+    // Glow filter
+    const filter = document.createElementNS(svgNS, 'filter');
+    filter.setAttribute('id', 'jeanne-glow');
+    filter.setAttribute('x', '-30%'); filter.setAttribute('y', '-30%');
+    filter.setAttribute('width', '160%'); filter.setAttribute('height', '160%');
+    const blur = document.createElementNS(svgNS, 'feGaussianBlur');
+    blur.setAttribute('stdDeviation', '6');
+    blur.setAttribute('result', 'blur');
+    filter.appendChild(blur);
+    const merge = document.createElementNS(svgNS, 'feMerge');
+    const mn1 = document.createElementNS(svgNS, 'feMergeNode');
+    mn1.setAttribute('in', 'blur');
+    const mn2 = document.createElementNS(svgNS, 'feMergeNode');
+    mn2.setAttribute('in', 'SourceGraphic');
+    merge.appendChild(mn1); merge.appendChild(mn2);
+    filter.appendChild(merge);
+    defs.appendChild(filter);
+
+    svg.appendChild(defs);
+
+    function addElement(tag, attrs) {
+      const el = document.createElementNS(svgNS, tag);
+      for (const [k,v] of Object.entries(attrs)) {
+        el.setAttribute(k, v);
+      }
+      return el;
+    }
+
+    // Background halo
+    const halo = addElement('circle', {
+      cx: cx, cy: cy-5, r: '90',
+      fill: 'rgba(180,160,210,0.04)',
+      filter: 'url(#jeanne-glow)'
+    });
+    svg.appendChild(halo);
+
+    // Outer halo ring
+    const haloRing = addElement('circle', {
+      cx: cx, cy: cy-5, r: '105',
+      fill: 'none',
+      stroke: 'rgba(200,180,220,0.06)',
+      'stroke-width': '0.5',
+      'stroke-dasharray': '3 8'
+    });
+    svg.appendChild(haloRing);
+
+    // === HAIR (blonde, long) ===
+    const hairBack = addElement('path', {
+      d: `M${cx-45},${cy-40} Q${cx-50},${cy+30} ${cx-40},${cy+60} Q${cx-30},${cy+75} ${cx-20},${cy+65} L${cx-10},${cy+55} Q${cx-15},${cy+20} ${cx-5},${cy-15} Q${cx-25},${cy-60} ${cx-25},${cy-85} Q${cx-20},${cy-95} ${cx-15},${cy-92} Q${cx-45},${cy-60} ${cx-45},${cy-40}Z`,
+      fill: '#e8c878', opacity: '0.85'
+    });
+    svg.appendChild(hairBack);
+
+    const hairBackR = addElement('path', {
+      d: `M${cx+45},${cy-40} Q${cx+50},${cy+30} ${cx+40},${cy+60} Q${cx+30},${cy+75} ${cx+20},${cy+65} L${cx+10},${cy+55} Q${cx+15},${cy+20} ${cx+5},${cy-15} Q${cx+25},${cy-60} ${cx+25},${cy-85} Q${cx+20},${cy-95} ${cx+15},${cy-92} Q${cx+45},${cy-60} ${cx+45},${cy-40}Z`,
+      fill: '#e8c878', opacity: '0.85'
+    });
+    svg.appendChild(hairBackR);
+
+    // Hair top
+    const hairTop = addElement('path', {
+      d: `M${cx-38},${cy-48} Q${cx-35},${cy-72} ${cx-25},${cy-82} Q${cx-15},${cy-90} ${cx},${cy-88} Q${cx+15},${cy-90} ${cx+25},${cy-82} Q${cx+35},${cy-72} ${cx+38},${cy-48} Q${cx+35},${cy-40} ${cx+25},${cy-35} Q${cx+15},${cy-32} ${cx},${cy-33} Q${cx-15},${cy-32} ${cx-25},${cy-35} Q${cx-35},${cy-40} ${cx-38},${cy-48}Z`,
+      fill: '#f0d48a'
+    });
+    svg.appendChild(hairTop);
+
+    // === FACE ===
+    const face = addElement('ellipse', {
+      cx: cx, cy: cy-18, rx: '32', ry: '42',
+      fill: '#f5e6d3', opacity: '0.95'
+    });
+    svg.appendChild(face);
+
+    // Jawline refine
+    const jaw = addElement('path', {
+      d: `M${cx-17},${cy-10} Q${cx-19},${cy+10} ${cx-12},${cy+22} Q${cx-5},${cy+28} ${cx},${cy+26} Q${cx+5},${cy+28} ${cx+12},${cy+22} Q${cx+19},${cy+10} ${cx+17},${cy-10}`,
+      fill: '#f5e6d3', stroke: 'rgba(180,140,120,0.25)', 'stroke-width': '0.5'
+    });
+    svg.appendChild(jaw);
+
+    // === EYES (closed - prayer) ===
+    const eyeL = addElement('path', {
+      d: `M${cx-16},${cy-24} Q${cx-11},${cy-20} ${cx-5},${cy-24}`,
+      fill: 'none', stroke: 'rgba(100,70,60,0.55)', 'stroke-width': '1.2',
+      'stroke-linecap': 'round'
+    });
+    svg.appendChild(eyeL);
+
+    const eyeR = addElement('path', {
+      d: `M${cx+5},${cy-24} Q${cx+11},${cy-20} ${cx+16},${cy-24}`,
+      fill: 'none', stroke: 'rgba(100,70,60,0.55)', 'stroke-width': '1.2',
+      'stroke-linecap': 'round'
+    });
+    svg.appendChild(eyeR);
+
+    // Eyelashes
+    const lashL = addElement('line', {
+      x1: cx-16, y1: cy-24.5, x2: cx-16.5, y2: cy-22,
+      stroke: 'rgba(100,70,60,0.35)', 'stroke-width': '0.6'
+    });
+    svg.appendChild(lashL);
+    const lashR = addElement('line', {
+      x1: cx+16, y1: cy-24.5, x2: cx+16.5, y2: cy-22,
+      stroke: 'rgba(100,70,60,0.35)', 'stroke-width': '0.6'
+    });
+    svg.appendChild(lashR);
+
+    // === NOSE ===
+    const nose = addElement('path', {
+      d: `M${cx},${cy-20} L${cx-1},${cy-11} L${cx-3},${cy-11}`,
+      fill: 'none', stroke: 'rgba(160,130,115,0.3)', 'stroke-width': '0.6',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+    });
+    svg.appendChild(nose);
+
+    // === MOUTH ===
+    const mouth = addElement('path', {
+      d: `M${cx-6},${cy-2} Q${cx-3},${cy+1} ${cx},${cy} Q${cx+3},${cy+1} ${cx+6},${cy-2}`,
+      fill: 'none', stroke: 'rgba(160,110,100,0.4)', 'stroke-width': '0.7',
+      'stroke-linecap': 'round'
+    });
+    svg.appendChild(mouth);
+
+    // === HEADPIECE / CROWN ===
+    const crownBase = addElement('path', {
+      d: `M${cx-24},${cy-36} Q${cx-20},${cy-44} ${cx-16},${cy-48} Q${cx-8},${cy-52} ${cx},${cy-53} Q${cx+8},${cy-52} ${cx+16},${cy-48} Q${cx+20},${cy-44} ${cx+24},${cy-36}`,
+      fill: 'none', stroke: 'rgba(201,160,77,0.5)', 'stroke-width': '1'
+    });
+    svg.appendChild(crownBase);
+
+    // Crown cross
+    const crossV = addElement('line', {
+      x1: cx, y1: cy-53, x2: cx, y2: cy-66,
+      stroke: 'rgba(201,160,77,0.55)', 'stroke-width': '1.2'
+    });
+    svg.appendChild(crossV);
+    const crossH = addElement('line', {
+      x1: cx-5, y1: cy-60, x2: cx+5, y2: cy-60,
+      stroke: 'rgba(201,160,77,0.55)', 'stroke-width': '1'
+    });
+    svg.appendChild(crossH);
+
+    // Crown ornaments
+    const crownDot1 = addElement('circle', {
+      cx: cx-16, cy: cy-47, r: '1.5',
+      fill: 'rgba(201,160,77,0.5)'
+    });
+    svg.appendChild(crownDot1);
+    const crownDot2 = addElement('circle', {
+      cx: cx, cy: cy-51, r: '1.8',
+      fill: 'rgba(201,160,77,0.5)'
+    });
+    svg.appendChild(crownDot2);
+    const crownDot3 = addElement('circle', {
+      cx: cx+16, cy: cy-47, r: '1.5',
+      fill: 'rgba(201,160,77,0.5)'
+    });
+    svg.appendChild(crownDot3);
+
+    // === BODY / ARMOR ===
+    const armor = addElement('path', {
+      d: `M${cx-25},${cy+22} Q${cx-30},${cy+45} ${cx-28},${cy+65} L${cx+28},${cy+65} Q${cx+30},${cy+45} ${cx+25},${cy+22} Z`,
+      fill: '#3d5478', opacity: '0.7'
+    });
+    svg.appendChild(armor);
+
+    // Armor chest plate
+    const chest = addElement('path', {
+      d: `M${cx-20},${cy+24} Q${cx-22},${cy+42} ${cx-18},${cy+58} L${cx+18},${cy+58} Q${cx+22},${cy+42} ${cx+20},${cy+24} Z`,
+      fill: '#4a6588', opacity: '0.5'
+    });
+    svg.appendChild(chest);
+
+    // Armor center line
+    const centerLine = addElement('line', {
+      x1: cx, y1: cy+26, x2: cx, y2: cy+56,
+      stroke: 'rgba(180,160,220,0.2)', 'stroke-width': '0.5'
+    });
+    svg.appendChild(centerLine);
+
+    // === COLLAR / MANTLE ===
+    const collarL = addElement('path', {
+      d: `M${cx-26},${cy+18} Q${cx-32},${cy+22} ${cx-28},${cy+28} L${cx-15},${cy+22} Q${cx-18},${cy+16} ${cx-25},${cy+18}Z`,
+      fill: '#2a3d58', opacity: '0.7'
+    });
+    svg.appendChild(collarL);
+
+    const collarR = addElement('path', {
+      d: `M${cx+26},${cy+18} Q${cx+32},${cy+22} ${cx+28},${cy+28} L${cx+15},${cy+22} Q${cx+18},${cy+16} ${cx+25},${cy+18}Z`,
+      fill: '#2a3d58', opacity: '0.7'
+    });
+    svg.appendChild(collarR);
+
+    // === HANDS CLASPED IN PRAYER ===
+    const handsGroup = document.createElementNS(svgNS, 'g');
+
+    // Left hand
+    const handL = addElement('path', {
+      d: `M${cx-12},${cy+40} Q${cx-8},${cy+36} ${cx-3},${cy+34} Q${cx},${cy+33} ${cx-1},${cy+35} Q${cx-4},${cy+39} ${cx-10},${cy+42} Z`,
+      fill: '#f0dcc8', opacity: '0.85'
+    });
+    handsGroup.appendChild(handL);
+
+    // Right hand
+    const handR = addElement('path', {
+      d: `M${cx+12},${cy+40} Q${cx+8},${cy+36} ${cx+3},${cy+34} Q${cx},${cy+33} ${cx+1},${cy+35} Q${cx+4},${cy+39} ${cx+10},${cy+42} Z`,
+      fill: '#f0dcc8', opacity: '0.85'
+    });
+    handsGroup.appendChild(handR);
+
+    // Clasped fingers
+    const fingers = addElement('path', {
+      d: `M${cx-4},${cy+36} Q${cx-2},${cy+34} ${cx},${cy+35} Q${cx+2},${cy+34} ${cx+4},${cy+36}`,
+      fill: 'none', stroke: 'rgba(160,130,110,0.3)', 'stroke-width': '0.4'
+    });
+    handsGroup.appendChild(fingers);
+
+    svg.appendChild(handsGroup);
+
+    // === ARMOR DETAILS ===
+    // Shoulder plates
+    const shoulderL = addElement('ellipse', {
+      cx: cx-30, cy: cy+28, rx: '12', ry: '7',
+      fill: 'none', stroke: 'rgba(180,160,220,0.18)', 'stroke-width': '0.5'
+    });
+    svg.appendChild(shoulderL);
+
+    const shoulderR = addElement('ellipse', {
+      cx: cx+30, cy: cy+28, rx: '12', ry: '7',
+      fill: 'none', stroke: 'rgba(180,160,220,0.18)', 'stroke-width': '0.5'
+    });
+    svg.appendChild(shoulderR);
+
+    // Light particles around
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      const r = 100 + Math.random() * 20;
+      const px = cx + Math.cos(angle) * r;
+      const py = cy-5 + Math.sin(angle) * r;
+      const dot = addElement('circle', {
+        cx: px, cy: py, r: String(0.6 + Math.random() * 1.2),
+        fill: 'rgba(200,180,220,0.25)',
+        opacity: String(0.2 + Math.random() * 0.4)
+      });
+      svg.appendChild(dot);
+    }
+
+    return svg;
+  }
+
+  // ---- RENDER JEANNE ----
+  jeanneContainer.appendChild(createJeanneSVG());
+
+  // ---- CREATE ORBITS & NODES ----
+  const allNodes = [];
+
+  function getCenter() {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    return { cx: w/2, cy: h/2 };
+  }
+
+  function createOrbitRing(rx, ry, angle) {
+    const ring = document.createElement('div');
+    ring.className = 'orbit-ring';
+    const d = Math.max(rx, ry) * 2;
+    ring.style.width = `${rx*2}px`;
+    ring.style.height = `${ry*2}px`;
+    ring.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    ring.style.top = '50%';
+    ring.style.left = '50%';
+    return ring;
+  }
+
+  function createNode(nodeData) {
+    const el = document.createElement('div');
+    el.className = 'knowledge-node';
+
+    const core = document.createElement('div');
+    core.className = 'node-core';
+    core.textContent = nodeData.icon;
+    el.appendChild(core);
+
+    const label = document.createElement('div');
+    label.className = 'node-label bottom';
+    label.textContent = nodeData.label;
+    el.appendChild(label);
+
+    el.addEventListener('click', () => openNodeDetail(nodeData));
+    el.addEventListener('mouseenter', (e) => {
+      tooltip.textContent = nodeData.label;
+      tooltip.classList.add('visible');
+    });
+    el.addEventListener('mouseleave', () => {
+      tooltip.classList.remove('visible');
+    });
+    el.addEventListener('mousemove', (e) => {
+      tooltip.style.left = (e.clientX + 16) + 'px';
+      tooltip.style.top = (e.clientY - 30) + 'px';
+    });
+
+    return el;
+  }
+
+  // Build orbits and nodes
+  orbitData.forEach((orbit, oi) => {
+    const ring = createOrbitRing(orbit.rx, orbit.ry, orbit.angle);
+    container.appendChild(ring);
+
+    orbit.nodes.forEach((nodeData) => {
+      const nodeEl = createNode(nodeData);
+      container.appendChild(nodeEl);
+      allNodes.push({
+        el: nodeEl,
+        orbit,
+        nodeData,
+        phase: Math.random() * Math.PI * 2,
+      });
+    });
+  });
+
+  // ---- ANIMATION ----
+  let animFrame = 0;
+
+  function animate() {
+    const { cx, cy } = getCenter();
+    animFrame++;
+
+    allNodes.forEach((item) => {
+      const { orbit, phase } = item;
+      const angleRad = (orbit.angle * Math.PI) / 180;
+      const t = animFrame * orbit.speed + phase;
+      const localX = orbit.rx * Math.cos(t);
+      const localY = orbit.ry * Math.sin(t);
+      const globalX = cx + localX * Math.cos(angleRad) - localY * Math.sin(angleRad);
+      const globalY = cy + localX * Math.sin(angleRad) + localY * Math.cos(angleRad);
+      item.el.style.left = globalX + 'px';
+      item.el.style.top = globalY + 'px';
+    });
+
+    // Update orbit rings position
+    container.querySelectorAll('.orbit-ring').forEach((ring, i) => {
+      ring.style.top = cy + 'px';
+      ring.style.left = cx + 'px';
+    });
+
+    requestAnimationFrame(animate);
+  }
+
+  // ---- MODAL ----
+  let currentModalNode = null;
+  const modalOverlay = document.getElementById('modal-overlay');
+  const modalIcon = document.getElementById('modal-icon');
+  const modalTitle = document.getElementById('modal-title');
+  const modalDesc = document.getElementById('modal-desc');
+
+  function openNodeDetail(nodeData) {
+    currentModalNode = nodeData;
+    modalIcon.textContent = nodeData.icon;
+    modalTitle.textContent = nodeData.label;
+    modalDesc.textContent = nodeData.desc;
+    modalOverlay.classList.add('active');
+  }
+
+  window.closeModal = function(e) {
+    if (e && e.target !== modalOverlay) return;
+    modalOverlay.classList.remove('active');
+    currentModalNode = null;
+  };
+
+  window.enterKnowledgeGraph = function() {
+    if (!currentModalNode) return;
+    const link = currentModalNode.link;
+    modalOverlay.classList.remove('active');
+    alert(`导航至: ${currentModalNode.label}\n链接: ${link}\n\n(此处可替换为实际路由跳转)`);
+    currentModalNode = null;
+  };
+
+  // Keyboard close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
+      modalOverlay.classList.remove('active');
+      currentModalNode = null;
+    }
+  });
+
+  // ---- JEANNE BREATHING ANIMATION ----
+  function jeanneBreath() {
+    const svg = jeanneContainer.querySelector('svg');
+    if (!svg) return;
+    let t = 0;
+    function breathe() {
+      t += 0.008;
+      const scale = 1 + Math.sin(t) * 0.015;
+      jeanneContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      requestAnimationFrame(breathe);
+    }
+    requestAnimationFrame(breathe);
+  }
+
+  // ---- INIT ----
+  function init() {
+    const { cx, cy } = getCenter();
+    jeanneContainer.style.left = cx + 'px';
+    jeanneContainer.style.top = cy + 'px';
+    jeanneContainer.style.transform = 'translate(-50%, -50%)';
+    container.querySelectorAll('.orbit-ring').forEach((ring) => {
+      ring.style.top = cy + 'px';
+      ring.style.left = cx + 'px';
+    });
+    jeanneBreath();
+    requestAnimationFrame(animate);
+  }
+
+  // ---- RESIZE HANDLER ----
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      const { cx, cy } = getCenter();
+      jeanneContainer.style.left = cx + 'px';
+      jeanneContainer.style.top = cy + 'px';
+    }, 150);
+  });
+
+  // Start
+  init();
+
+})();
+</script>
+
+</body>
+</html>
