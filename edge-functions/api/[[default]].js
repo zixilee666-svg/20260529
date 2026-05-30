@@ -3182,6 +3182,7 @@ export async function onRequest(context) {
           { method: 'POST', path: '/api/admin/backup', desc: '全站备份' },
           { method: 'GET', path: '/api/admin/routes', desc: 'API 路由列表' },
           { method: 'POST', path: '/api/admin/workbuddy/seed', desc: '注入种子数据' },
+          { method: 'POST', path: '/api/admin/workbuddy/import-zotero-kv', desc: 'Zotero 批量导入到 KV' },
           { method: 'GET', path: '/api/admin/workbuddy/export', desc: '导出文献' },
           { method: 'POST', path: '/api/admin/workbuddy/clean', desc: '清理 KV 数据' },
           { method: 'POST', path: '/api/admin/workbuddy/reindex', desc: '重建索引' },
@@ -3226,6 +3227,151 @@ export async function onRequest(context) {
           await kvSetJson('spaces:admin', space);
         }
         return success({ added, total: adminPapers.length }, `Seed data injected: ${added} papers added`, request);
+      }
+
+      // POST /admin/workbuddy/import-zotero-kv - Zotero 批量导入到 KV
+      if (segments[2] === 'import-zotero-kv' && request.method === 'POST') {
+        const body = await request.json().catch(() => null);
+        if (!body || !body.papers) {
+          return apiError('Invalid Zotero export JSON. Expected { papers, libraries, notes }', 400, 'VALIDATION_ERROR', request);
+        }
+        const targetUsername = body.username || 'admin';
+        const targetUserId = await kvGet('users:by-username:' + targetUsername);
+        if (!targetUserId) {
+          return apiError('Target user not found: ' + targetUsername, 404, 'NOT_FOUND', request);
+        }
+
+        const papers = Array.isArray(body.papers) ? body.papers : [];
+        const libraries = Array.isArray(body.libraries) ? body.libraries : [];
+
+        let paperImported = 0;
+        let paperSkipped = 0;
+        let notesImported = 0;
+        let libCreated = 0;
+        const errors = [];
+
+        // 1. 导入论文
+        const zoteroKeyToPaperId = {};
+        const LIBRARY_COLORS = ['#3d5a80', '#C9A96E', '#2D8A4E', '#B91C1C', '#7C3AED', '#0891B2', '#D97706', '#DB2777'];
+        const LIBRARY_ICONS = ['Folder', 'BookOpen', 'Network', 'GitBranch', 'ShieldAlert', 'FlaskConical', 'FileText', 'Star'];
+
+        for (const p of papers) {
+          try {
+            // 检查是否已存在（按 zoteroKey 去重）
+            const existingId = await kvGet('zotero-paper-map:' + p.zoteroKey);
+            if (existingId) {
+              zoteroKeyToPaperId[p.zoteroKey] = existingId;
+              paperSkipped++;
+              continue;
+            }
+
+            const paperId = 'zotero-' + (p.zoteroKey || generateId('zp'));
+            const paperObj = {
+              id: paperId,
+              title: p.title || '未命名文献',
+              authors: Array.isArray(p.authors) ? p.authors : [],
+              year: p.year || new Date().getFullYear(),
+              venue: p.venue || '',
+              venueType: p.venueType || 'journal',
+              abstract: p.abstract || '',
+              doi: p.doi || '',
+              url: p.url || '',
+              volume: p.volume || '',
+              issue: p.issue || '',
+              pages: p.pages || '',
+              tags: Array.isArray(p.tags) ? p.tags : [],
+              keywords: Array.isArray(p.tags) ? p.tags : [],
+              citations: p.citations || 0,
+              isFavorited: false,
+              isRead: false,
+              readingStatus: 'unread',
+              addedDate: p.dateAdded || new Date().toISOString(),
+              addedAt: p.dateAdded || new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              userId: targetUserId,
+              username: targetUsername,
+              zoteroKey: p.zoteroKey,
+            };
+
+            await kvSetJson('papers:' + paperId, paperObj);
+            await kvListAdd('users:' + targetUserId + ':papers', paperId);
+            await kvSet('zotero-paper-map:' + p.zoteroKey, paperId);
+            zoteroKeyToPaperId[p.zoteroKey] = paperId;
+            paperImported++;
+
+            // 导入笔记
+            const paperNotes = p.notes || [];
+            if (paperNotes.length > 0) {
+              const noteObjects = paperNotes.map((n, idx) => ({
+                id: 'zotero-note-' + (n.zoteroKey || idx),
+                paperId: paperId,
+                content: n.content || '',
+                createdAt: n.dateAdded || new Date().toISOString(),
+                updatedAt: n.dateAdded || new Date().toISOString(),
+                userId: targetUserId,
+              }));
+              await kvSetJson('papers:' + paperId + ':notes', noteObjects);
+              notesImported += noteObjects.length;
+            }
+          } catch (e) {
+            errors.push({ zoteroKey: p.zoteroKey, error: e.message });
+          }
+        }
+
+        // 2. 导入 Libraries（文献库分类）
+        const libZoteroKeyToId = {};
+        for (let i = 0; i < libraries.length; i++) {
+          try {
+            const lib = libraries[i];
+            const libId = generateId('lib');
+            const paperIds = (lib.paperKeys || [])
+              .map(zk => zoteroKeyToPaperId[zk])
+              .filter(Boolean);
+
+            const libObj = {
+              id: libId,
+              userId: targetUserId,
+              username: targetUsername,
+              name: lib.name || '导入分类',
+              description: lib.parentKey ? `Zotero 子分类 (父: ${lib.parentKey})` : 'Zotero 导入分类',
+              color: LIBRARY_COLORS[i % LIBRARY_COLORS.length],
+              icon: LIBRARY_ICONS[i % LIBRARY_ICONS.length],
+              papers: paperIds,
+              paperIds: paperIds,
+              paperCount: paperIds.length,
+              tags: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              isDefault: false,
+              zoteroKey: lib.zoteroKey,
+            };
+
+            await kvSetJson('libraries:' + libId, libObj);
+            await kvListAdd('users:' + targetUserId + ':libraries', libId);
+            libZoteroKeyToId[lib.zoteroKey] = libId;
+            libCreated++;
+          } catch (e) {
+            errors.push({ library: lib.zoteroKey, error: e.message });
+          }
+        }
+
+        // 3. 更新 space stats
+        const space = await kvGetJson('spaces:' + targetUsername);
+        if (space) {
+          const allPapers = await kvListGet('users:' + targetUserId + ':papers');
+          const allLibraries = await kvListGet('users:' + targetUserId + ':libraries');
+          space.stats = space.stats || {};
+          space.stats.papers = allPapers.length;
+          space.stats.libraries = allLibraries.length;
+          await kvSetJson('spaces:' + targetUsername, space);
+        }
+
+        return success({
+          papers: { imported: paperImported, skipped: paperSkipped },
+          notes: { imported: notesImported },
+          libraries: { created: libCreated },
+          errors: errors.length > 0 ? errors.slice(0, 20) : undefined,
+        }, `Zotero KV import: ${paperImported} papers, ${libCreated} libraries, ${notesImported} notes`, request);
       }
 
       // GET /admin/workbuddy/export - 导出全部文献

@@ -1566,6 +1566,17 @@ class ApiClient {
     );
   }
 
+  async importZoteroKV(zoteroData: any, username?: string) {
+    return this.request<{
+      success: boolean;
+      data: { papers: { imported: number; skipped: number }; notes: { imported: number }; libraries: { created: number }; errors?: any[] };
+      message: string;
+    }>(
+      '/admin/workbuddy/import-zotero-kv',
+      { method: 'POST', body: JSON.stringify({ ...zoteroData, username }) }
+    );
+  }
+
   // ---- AI ----
   async aiChat(conversationId: string | null, message: string, context?: string, modelConfig?: { baseUrl: string; apiKey: string; model: string }) {
     if (IS_MOCK) {

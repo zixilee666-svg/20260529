@@ -13,7 +13,7 @@ import {
   BookOpen, FolderKanban, LayoutGrid, Wrench, HardDrive,
   Save, X, SlidersHorizontal, ChevronDown, ChevronUp,
   FileDown, RotateCcw, KeyRound, Lock, Unlock, Layers,
-  Sparkles, Monitor, Info, Code
+  Sparkles, Monitor, Info, Code, Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -1980,6 +1980,40 @@ export default function AdminPage() {
                       }}
                     />
                     <WorkBuddyButton
+                      icon={Upload}
+                      label="从 Zotero 导入"
+                      desc="上传 zotero_export.json 批量导入"
+                      color="text-primary"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.json';
+                        input.onchange = async (e: any) => {
+                          const file = e.target?.files?.[0];
+                          if (!file) return;
+                          const toastId = toast.loading('正在导入 Zotero 数据...');
+                          try {
+                            const text = await file.text();
+                            const data = JSON.parse(text);
+                            const res = await api.importZoteroKV(data, 'admin');
+                            if (res.success) {
+                              const d = res.data;
+                              toast.success(
+                                `Zotero 导入完成：${d.papers.imported} 篇论文（跳过 ${d.papers.skipped}），${d.libraries.created} 个文献库，${d.notes.imported} 条笔记`,
+                                { id: toastId, duration: 6000 }
+                              );
+                              handleRefresh();
+                            } else {
+                              toast.error((res as any).error || '导入失败', { id: toastId });
+                            }
+                          } catch (e: any) {
+                            toast.error(e.message || '导入失败', { id: toastId });
+                          }
+                        };
+                        input.click();
+                      }}
+                    />
+                    <WorkBuddyButton
                       icon={Download}
                       label="导出全部文献"
                       desc="以 BibTeX/CSV/JSON 格式导出"
@@ -2048,6 +2082,7 @@ export default function AdminPage() {
                   <div className="space-y-2 font-mono text-xs">
                     {[
                       { method: 'POST', path: '/api/admin/workbuddy/seed', desc: '注入种子数据' },
+                      { method: 'POST', path: '/api/admin/workbuddy/import-zotero-kv', desc: 'Zotero 批量导入 KV' },
                       { method: 'GET', path: '/api/admin/workbuddy/export', desc: '获取系统统计' },
                       { method: 'POST', path: '/api/admin/workbuddy/clean', desc: '清理 KV 数据' },
                       { method: 'GET', path: '/api/admin/workbuddy/export?format=bibtex', desc: '导出文献' },
