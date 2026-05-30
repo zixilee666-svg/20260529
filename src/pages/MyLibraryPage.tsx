@@ -9,6 +9,7 @@ import {
   ChevronRight, BookOpen, X, Check, FolderPlus,
   GripVertical, MoreHorizontal, Star, ExternalLink,
   Library as LibraryIcon, Upload, Pencil, PlusCircle,
+  CheckSquare, Square, Download, Tag,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -72,6 +73,15 @@ export default function MyLibraryPage() {
   const [addPapersOpen, setAddPapersOpen] = useState(false);
   const [selectedPaperIdsToAdd, setSelectedPaperIdsToAdd] = useState<string[]>([]);
 
+  // 批量管理状态
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
+  const [batchMoveDialogOpen, setBatchMoveDialogOpen] = useState(false);
+  const [batchMoveTargetLibId, setBatchMoveTargetLibId] = useState<string>('');
+  const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
+  const [batchTagInput, setBatchTagInput] = useState('');
+  const [batchTagMode, setBatchTagMode] = useState<'add' | 'remove'>('add');
+
   // 删除论文
   const handleDeletePaper = useCallback(async (paperId: string) => {
     if (!confirm('确定要删除这篇文献吗？此操作不可撤销。')) return;
@@ -98,6 +108,188 @@ export default function MyLibraryPage() {
   const handlePaperUpdated = useCallback((updated: Paper) => {
     setAllPapers(prev => prev.map(p => p.id === updated.id ? updated : p));
   }, []);
+
+  // ========== 批量管理功能 ==========
+
+  // 切换批量选择模式
+  const toggleBatchMode = useCallback(() => {
+    setIsBatchMode(prev => !prev);
+    setSelectedBatchIds([]);
+  }, []);
+
+  // 切换单篇论文选中状态
+  const toggleBatchSelect = useCallback((paperId: string) => {
+    setSelectedBatchIds(prev =>
+      prev.includes(paperId) ? prev.filter(id => id !== paperId) : [...prev, paperId]
+    );
+  }, []);
+
+  // 全选
+  const handleSelectAll = useCallback(() => {
+    setSelectedBatchIds(filteredPapers.map(p => p.id));
+  }, [filteredPapers]);
+
+  // 取消全选
+  const handleDeselectAll = useCallback(() => {
+    setSelectedBatchIds([]);
+  }, []);
+
+  // 批量删除
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedBatchIds.length === 0) return;
+    if (!confirm(`确定要删除选中的 ${selectedBatchIds.length} 篇文献吗？此操作不可撤销。`)) return;
+
+    const previous = allPapers;
+    // Optimistic update
+    setAllPapers(prev => prev.filter(p => !selectedBatchIds.includes(p.id)));
+    setLibraries(prev => prev.map(l => ({
+      ...l,
+      paperIds: (l.paperIds || []).filter(id => !selectedBatchIds.includes(id)),
+    })));
+    setSelectedBatchIds([]);
+    setIsBatchMode(false);
+
+    try {
+      await Promise.all(selectedBatchIds.map(id => api.deletePaper(id)));
+      toast.success(`已删除 ${selectedBatchIds.length} 篇文献`);
+    } catch {
+      setAllPapers(previous);
+      toast.error('批量删除失败');
+    }
+  }, [selectedBatchIds, allPapers]);
+
+  // 批量移动 - 打开对话框
+  const openBatchMoveDialog = useCallback(() => {
+    setBatchMoveTargetLibId('');
+    setBatchMoveDialogOpen(true);
+  }, []);
+
+  // 批量移动 - 执行
+  const handleBatchMove = useCallback(async () => {
+    if (!batchMoveTargetLibId || selectedBatchIds.length === 0) return;
+    const targetLib = libraries.find(l => l.id === batchMoveTargetLibId);
+    if (!targetLib) return;
+
+    // Optimistic update
+    setLibraries(prev => prev.map(l => {
+      if (l.id === batchMoveTargetLibId) {
+        const newIds = [...(l.paperIds || [])];
+        selectedBatchIds.forEach(id => {
+          if (!newIds.includes(id)) newIds.push(id);
+        });
+        return { ...l, paperIds: newIds };
+      }
+      return l;
+    }));
+    setBatchMoveDialogOpen(false);
+    setSelectedBatchIds([]);
+    setIsBatchMode(false);
+
+    try {
+      await Promise.all(
+        selectedBatchIds.map(id => api.addPaperToLibrary(batchMoveTargetLibId, id))
+      );
+      toast.success(`已移动 ${selectedBatchIds.length} 篇文献到「${targetLib.name}」`);
+    } catch (err: any) {
+      toast.error(err.message || '批量移动失败');
+      loadLibraries();
+    }
+  }, [batchMoveTargetLibId, selectedBatchIds, libraries, loadLibraries]);
+
+  // 批量导出 - BibTeX
+  const handleBatchExportBibtex = useCallback(() => {
+    if (selectedBatchIds.length === 0) return;
+    const papers = allPapers.filter(p => selectedBatchIds.includes(p.id));
+    const bibtex = papers.map(p => {
+      const key = p.id.replace(/[^a-zA-Z0-9]/g, '_');
+      const authors = p.authors.join(' and ');
+      const type = p.venue ? 'article' : 'misc';
+      return `@${type}{${key},
+  title={${p.title}},
+  author={${authors}},
+  year={${p.year || ''}},
+  venue={${p.venue || ''}},
+  url={${p.url || ''}}
+}`;
+    }).join('\n\n');
+
+    const blob = new Blob([bibtex], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `papers_${new Date().toISOString().slice(0, 10)}.bib`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`已导出 ${papers.length} 篇文献为 BibTeX`);
+  }, [selectedBatchIds, allPapers]);
+
+  // 批量导出 - CSV
+  const handleBatchExportCsv = useCallback(() => {
+    if (selectedBatchIds.length === 0) return;
+    const papers = allPapers.filter(p => selectedBatchIds.includes(p.id));
+    const header = 'Title,Authors,Venue,Year,URL,Tags';
+    const rows = papers.map(p =>
+      `"${(p.title || '').replace(/"/g, '""')}","${(p.authors || []).join('; ')}","${p.venue || ''}",${p.year || ''},"${p.url || ''}","${(p.tags || []).join('; ')}"`
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `papers_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`已导出 ${papers.length} 篇文献为 CSV`);
+  }, [selectedBatchIds, allPapers]);
+
+  // 批量标签 - 打开对话框
+  const openBatchTagDialog = useCallback((mode: 'add' | 'remove') => {
+    setBatchTagMode(mode);
+    setBatchTagInput('');
+    setBatchTagDialogOpen(true);
+  }, []);
+
+  // 批量标签 - 执行
+  const handleBatchTag = useCallback(async () => {
+    if (selectedBatchIds.length === 0 || !batchTagInput.trim()) return;
+    const tags = batchTagInput.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+    if (tags.length === 0) return;
+
+    const previous = allPapers;
+    // Optimistic update
+    setAllPapers(prev => prev.map(p => {
+      if (!selectedBatchIds.includes(p.id)) return p;
+      const currentTags = p.tags || [];
+      let newTags: string[];
+      if (batchTagMode === 'add') {
+        newTags = [...new Set([...currentTags, ...tags])];
+      } else {
+        newTags = currentTags.filter(t => !tags.includes(t));
+      }
+      return { ...p, tags: newTags };
+    }));
+    setBatchTagDialogOpen(false);
+    setSelectedBatchIds([]);
+    setIsBatchMode(false);
+
+    try {
+      await Promise.all(
+        selectedBatchIds.map(id => {
+          const paper = allPapers.find(p => p.id === id);
+          if (!paper) return Promise.resolve();
+          const currentTags = paper.tags || [];
+          const newTags = batchTagMode === 'add'
+            ? [...new Set([...currentTags, ...tags])]
+            : currentTags.filter(t => !tags.includes(t));
+          return api.updatePaper(id, { tags: newTags });
+        })
+      );
+      toast.success(`已${batchTagMode === 'add' ? '添加' : '移除'}标签到 ${selectedBatchIds.length} 篇文献`);
+    } catch {
+      setAllPapers(previous);
+      toast.error('批量标签失败');
+    }
+  }, [selectedBatchIds, batchTagInput, batchTagMode, allPapers]);
 
   // Load libraries, papers and materials
   const loadLibraries = useCallback(async () => {
@@ -453,8 +645,34 @@ export default function MyLibraryPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {selectedLibrary?.name} · {filteredPapers.length} 篇论文
+              {isBatchMode && selectedBatchIds.length > 0 && (
+                <span className="ml-2 text-primary font-medium">
+                  ({selectedBatchIds.length} 篇已选中)
+                </span>
+              )}
             </p>
             <div className="flex items-center gap-2">
+              {/* 批量管理按钮 */}
+              {filteredPapers.length > 0 && (
+                <Button
+                  size="sm"
+                  variant={isBatchMode ? 'default' : 'outline'}
+                  className={cn('h-7 text-xs gap-1', isBatchMode && 'bg-primary text-white')}
+                  onClick={toggleBatchMode}
+                >
+                  {isBatchMode ? (
+                    <>
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      退出批量
+                    </>
+                  ) : (
+                    <>
+                      <Square className="h-3.5 w-3.5" />
+                      批量管理
+                    </>
+                  )}
+                </Button>
+              )}
               {!selectedLibrary?.isDefault && (
                 <Button
                   size="sm"
@@ -494,6 +712,7 @@ export default function MyLibraryPage() {
               }
             />
           ) : (
+            <>
             <div className="space-y-2">
               {filteredPapers.map((paper, i) => (
                 <motion.div
@@ -502,7 +721,23 @@ export default function MyLibraryPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
                 >
-                  <div className="group flex items-start gap-4 rounded-lg border p-4 hover:shadow-md transition-all hover:border-primary/30">
+                  <div
+                    className={cn(
+                      "group flex items-start gap-4 rounded-lg border p-4 hover:shadow-md transition-all",
+                      isBatchMode ? "hover:border-muted" : "hover:border-primary/30"
+                    )}
+                  >
+                    {/* Batch mode checkbox */}
+                    {isBatchMode && (
+                      <div className="flex items-center">
+                        <Checkbox
+                          checked={selectedBatchIds.includes(paper.id)}
+                          onCheckedChange={() => toggleBatchSelect(paper.id)}
+                          className="mt-1"
+                        />
+                      </div>
+                    )}
+
                     {/* Book icon */}
                     <div className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <BookOpen className="h-5 w-5" />
@@ -533,8 +768,11 @@ export default function MyLibraryPage() {
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Actions - 批量模式下隐藏 */}
+                    <div className={cn(
+                      "flex items-center gap-1 shrink-0",
+                      isBatchMode ? "hidden" : "opacity-0 group-hover:opacity-100 transition-opacity"
+                    )}>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -572,6 +810,57 @@ export default function MyLibraryPage() {
                 </motion.div>
               ))}
             </div>
+
+              {/* 批量操作栏 */}
+              {isBatchMode && selectedBatchIds.length > 0 && (
+                <div className="sticky bottom-0 bg-background border-t p-4 flex items-center justify-between gap-4 shadow-lg mt-4">
+                  {/* 左侧：已选中数量和全选/取消全选 */}
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium">{selectedBatchIds.length} 篇已选中</span>
+                    <button
+                      onClick={handleSelectAll}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      全选
+                    </button>
+                    <button
+                      onClick={handleDeselectAll}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      取消全选
+                    </button>
+                  </div>
+
+                  {/* 右侧：批量操作按钮 */}
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleBatchDelete}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      删除
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={openBatchMoveDialog}>
+                      <FolderOpen className="h-3.5 w-3.5" />
+                      移动
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleBatchExportBibtex}>
+                      <Download className="h-3.5 w-3.5" />
+                      BibTeX
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleBatchExportCsv}>
+                      <Download className="h-3.5 w-3.5" />
+                      CSV
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => openBatchTagDialog('add')}>
+                      <Tag className="h-3.5 w-3.5" />
+                      添加标签
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => openBatchTagDialog('remove')}>
+                      <Tag className="h-3.5 w-3.5" />
+                      移除标签
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -774,6 +1063,79 @@ export default function MyLibraryPage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Batch Move Dialog */}
+      <Dialog open={batchMoveDialogOpen} onOpenChange={setBatchMoveDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>批量移动论文到其他文献库</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-muted-foreground mb-3">
+              将选中的 {selectedBatchIds.length} 篇论文移动到：
+            </p>
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {libraries.filter(l => l.id !== selectedLibraryId).map(lib => (
+                <button
+                  key={lib.id}
+                  onClick={() => setBatchMoveTargetLibId(lib.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left",
+                    batchMoveTargetLibId === lib.id ? "bg-primary/10 border border-primary" : "hover:bg-muted"
+                  )}
+                >
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: lib.color }} />
+                  <LibraryIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="text-sm">{lib.name}</span>
+                  {(lib.paperIds || []).filter(id => selectedBatchIds.includes(id)).length > 0 && (
+                    <Badge variant="secondary" className="ml-auto text-[10px]">
+                      {((lib.paperIds || []).filter(id => selectedBatchIds.includes(id)).length)} 已存在
+                    </Badge>
+                  )}
+                </button>
+              ))}
+              {libraries.filter(l => l.id !== selectedLibraryId).length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">暂无其他文献库</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchMoveDialogOpen(false)}>取消</Button>
+            <Button onClick={handleBatchMove} disabled={!batchMoveTargetLibId}>
+              移动到此库
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Tag Dialog */}
+      <Dialog open={batchTagDialogOpen} onOpenChange={setBatchTagDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{batchTagMode === 'add' ? '批量添加标签' : '批量移除标签'}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {batchTagMode === 'add' ? '为选中的 ' + selectedBatchIds.length + ' 篇论文添加标签（多个标签用逗号分隔）：' : '从选中的 ' + selectedBatchIds.length + ' 篇论文移除标签（多个标签用逗号分隔）：'}
+            </p>
+            <Input
+              value={batchTagInput}
+              onChange={e => setBatchTagInput(e.target.value)}
+              placeholder="例如：图神经网络, 欺诈检测"
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">
+              提示：输入多个标签时，用逗号（中英文均可）分隔
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchTagDialogOpen(false)}>取消</Button>
+            <Button onClick={handleBatchTag} disabled={!batchTagInput.trim()}>
+              {batchTagMode === 'add' ? '添加标签' : '移除标签'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AnimatedPage>
   );
 }
