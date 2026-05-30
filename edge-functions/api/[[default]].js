@@ -2200,9 +2200,18 @@ export async function onRequest(context) {
     }
     // Notes & Highlights — KV 持久化
     if (segments.length === 3 && segments[2] === 'notes' && request.method === 'GET') {
-      const paper = await kvGetJson('papers:' + segments[1]);
-      const notes = (paper && paper.notes) ? paper.notes : [];
-      return success(notes, 'Success', request);
+      // 合并两个来源：paper.notes (用户手动添加) + papers:{id}:notes (Zotero 导入)
+      const paperId = segments[1];
+      const [paper, zoteroNotes] = await Promise.all([
+        kvGetJson('papers:' + paperId),
+        kvGetJson('papers:' + paperId + ':notes'),
+      ]);
+      const embeddedNotes = (paper && paper.notes) ? paper.notes : [];
+      const extraNotes = Array.isArray(zoteroNotes) ? zoteroNotes : [];
+      // 去重：embedded 优先，extra 补充
+      const existingIds = new Set(embeddedNotes.map(n => n.id));
+      const merged = [...embeddedNotes, ...extraNotes.filter(n => !existingIds.has(n.id))];
+      return success(merged, 'Success', request);
     }
     if (segments.length === 3 && segments[2] === 'notes' && request.method === 'POST') {
       try {
