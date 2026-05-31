@@ -109,6 +109,114 @@ export default function MyLibraryPage() {
     setAllPapers(prev => prev.map(p => p.id === updated.id ? updated : p));
   }, []);
 
+  // Load libraries, papers and materials
+  const loadLibraries = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [libRes, paperRes, matRes] = await Promise.all([
+        api.getLibraries(),
+        api.getPapers({ pageSize: 200 }),
+        api.getMaterials(),
+      ]);
+      if (paperRes.success && paperRes.data) {
+        setAllPapers(paperRes.data);
+      }
+      if (libRes.success && libRes.data) {
+        setLibraries(libRes.data);
+        if (!selectedLibraryId || !libRes.data.find(l => l.id === selectedLibraryId)) {
+          setSelectedLibraryId(libRes.data[0]?.id || 'lib-all');
+        }
+      }
+      if (matRes.success && matRes.data) {
+        const matData = (matRes as any).data || [];
+        setMaterials(Array.isArray(matData) ? matData : (matData.data || []));
+      }
+    } catch {
+      // Fallback: empty state
+      setLibraries([{
+        id: 'lib-all', name: '全部文献', color: '#3d5a80',
+        icon: 'Library', paperIds: [],
+        createdAt: new Date().toISOString(), isDefault: true,
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedLibraryId]);
+
+  useEffect(() => { loadLibraries(); }, [loadLibraries]);
+
+  // Selected library
+  const selectedLibrary = useMemo(
+    () => libraries.find(l => l.id === selectedLibraryId) || libraries[0],
+    [libraries, selectedLibraryId]
+  );
+
+  // Papers in selected library
+  const libraryPapers = useMemo(() => {
+    const lib = selectedLibrary;
+    if (!lib) return [];
+    if (lib.id === 'lib-all') return allPapers;
+    const libPaperIds = new Set(lib.paperIds || []);
+    return allPapers.filter(p => libPaperIds.has(p.id));
+  }, [selectedLibrary, allPapers]);
+
+  // 添加论文到当前文献库
+  const openAddPapers = useCallback(() => {
+    const currentIds = selectedLibrary?.paperIds || [];
+    setSelectedPaperIdsToAdd(currentIds);
+    setAddPapersOpen(true);
+  }, [selectedLibrary]);
+
+  const togglePaperToAdd = useCallback((paperId: string) => {
+    setSelectedPaperIdsToAdd(prev =>
+      prev.includes(paperId) ? prev.filter(id => id !== paperId) : [...prev, paperId]
+    );
+  }, []);
+
+  const saveAddedPapers = useCallback(async () => {
+    if (!selectedLibrary || selectedLibrary.isDefault) return;
+    const currentIds = selectedLibrary.paperIds || [];
+    const newIds = selectedPaperIdsToAdd.filter(id => !currentIds.includes(id));
+
+    if (newIds.length === 0 && selectedPaperIdsToAdd.length === currentIds.length) {
+      setAddPapersOpen(false);
+      return;
+    }
+
+    // Optimistic update
+    setLibraries(prev => prev.map(l =>
+      l.id === selectedLibrary.id ? { ...l, paperIds: selectedPaperIdsToAdd } : l
+    ));
+
+    try {
+      // Remove papers that were unchecked
+      const removedIds = currentIds.filter(id => !selectedPaperIdsToAdd.includes(id));
+      if (removedIds.length > 0) {
+        await api.updateLibrary(selectedLibrary.id, { papers: selectedPaperIdsToAdd });
+      }
+      // Add new papers
+      for (const paperId of newIds) {
+        await api.addPaperToLibrary(selectedLibrary.id, paperId);
+      }
+      toast.success(`已更新关联文献`);
+      setAddPapersOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || '添加失败');
+      loadLibraries();
+    }
+  }, [selectedLibrary, selectedPaperIdsToAdd, loadLibraries]);
+
+  // Filter papers by search
+  const filteredPapers = useMemo(() => {
+    if (!search.trim()) return libraryPapers;
+    const q = search.toLowerCase();
+    return libraryPapers.filter(p =>
+      p.title.toLowerCase().includes(q) ||
+      p.authors.some(a => a.toLowerCase().includes(q)) ||
+      p.venue.toLowerCase().includes(q)
+    );
+  }, [libraryPapers, search]);
+
   // ========== 批量管理功能 ==========
 
   // 切换批量选择模式
@@ -290,114 +398,6 @@ export default function MyLibraryPage() {
       toast.error('批量标签失败');
     }
   }, [selectedBatchIds, batchTagInput, batchTagMode, allPapers]);
-
-  // Load libraries, papers and materials
-  const loadLibraries = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [libRes, paperRes, matRes] = await Promise.all([
-        api.getLibraries(),
-        api.getPapers({ pageSize: 200 }),
-        api.getMaterials(),
-      ]);
-      if (paperRes.success && paperRes.data) {
-        setAllPapers(paperRes.data);
-      }
-      if (libRes.success && libRes.data) {
-        setLibraries(libRes.data);
-        if (!selectedLibraryId || !libRes.data.find(l => l.id === selectedLibraryId)) {
-          setSelectedLibraryId(libRes.data[0]?.id || 'lib-all');
-        }
-      }
-      if (matRes.success && matRes.data) {
-        const matData = (matRes as any).data || [];
-        setMaterials(Array.isArray(matData) ? matData : (matData.data || []));
-      }
-    } catch {
-      // Fallback: empty state
-      setLibraries([{
-        id: 'lib-all', name: '全部文献', color: '#3d5a80',
-        icon: 'Library', paperIds: [],
-        createdAt: new Date().toISOString(), isDefault: true,
-      }]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedLibraryId]);
-
-  useEffect(() => { loadLibraries(); }, [loadLibraries]);
-
-  // Selected library
-  const selectedLibrary = useMemo(
-    () => libraries.find(l => l.id === selectedLibraryId) || libraries[0],
-    [libraries, selectedLibraryId]
-  );
-
-  // Papers in selected library
-  const libraryPapers = useMemo(() => {
-    const lib = selectedLibrary;
-    if (!lib) return [];
-    if (lib.id === 'lib-all') return allPapers;
-    const libPaperIds = new Set(lib.paperIds || []);
-    return allPapers.filter(p => libPaperIds.has(p.id));
-  }, [selectedLibrary, allPapers]);
-
-  // 添加论文到当前文献库
-  const openAddPapers = useCallback(() => {
-    const currentIds = selectedLibrary?.paperIds || [];
-    setSelectedPaperIdsToAdd(currentIds);
-    setAddPapersOpen(true);
-  }, [selectedLibrary]);
-
-  const togglePaperToAdd = useCallback((paperId: string) => {
-    setSelectedPaperIdsToAdd(prev =>
-      prev.includes(paperId) ? prev.filter(id => id !== paperId) : [...prev, paperId]
-    );
-  }, []);
-
-  const saveAddedPapers = useCallback(async () => {
-    if (!selectedLibrary || selectedLibrary.isDefault) return;
-    const currentIds = selectedLibrary.paperIds || [];
-    const newIds = selectedPaperIdsToAdd.filter(id => !currentIds.includes(id));
-
-    if (newIds.length === 0 && selectedPaperIdsToAdd.length === currentIds.length) {
-      setAddPapersOpen(false);
-      return;
-    }
-
-    // Optimistic update
-    setLibraries(prev => prev.map(l =>
-      l.id === selectedLibrary.id ? { ...l, paperIds: selectedPaperIdsToAdd } : l
-    ));
-
-    try {
-      // Remove papers that were unchecked
-      const removedIds = currentIds.filter(id => !selectedPaperIdsToAdd.includes(id));
-      if (removedIds.length > 0) {
-        await api.updateLibrary(selectedLibrary.id, { papers: selectedPaperIdsToAdd });
-      }
-      // Add new papers
-      for (const paperId of newIds) {
-        await api.addPaperToLibrary(selectedLibrary.id, paperId);
-      }
-      toast.success(`已更新关联文献`);
-      setAddPapersOpen(false);
-    } catch (err: any) {
-      toast.error(err.message || '添加失败');
-      loadLibraries();
-    }
-  }, [selectedLibrary, selectedPaperIdsToAdd, loadLibraries]);
-
-  // Filter papers by search
-  const filteredPapers = useMemo(() => {
-    if (!search.trim()) return libraryPapers;
-    const q = search.toLowerCase();
-    return libraryPapers.filter(p =>
-      p.title.toLowerCase().includes(q) ||
-      p.authors.some(a => a.toLowerCase().includes(q)) ||
-      p.venue.toLowerCase().includes(q)
-    );
-  }, [libraryPapers, search]);
 
   // Open create dialog
   const openCreateDialog = () => {
