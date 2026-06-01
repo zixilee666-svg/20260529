@@ -127,8 +127,8 @@ Rules:
     parsed = extractWithRegex(text.slice(0, 4000));
   }
 
-  // ---- 组装结果 ----
-  const result: ParseResult = {
+  // ---- 组装数据（不含 citations，避免 TDZ） ----
+  const dataFields = {
     title: parsed?.title || '',
     authors: Array.isArray(parsed?.authors) ? parsed.authors : [],
     year: Number(parsed?.year) || new Date().getFullYear(),
@@ -141,19 +141,17 @@ Rules:
     url: parsed?.url || '',
     abstract: parsed?.abstract || '',
     keywords: Array.isArray(parsed?.keywords) ? parsed.keywords : [],
-    citations: {
-      bibtex: generateBibTeX(result as any),
-      ieee: generateIEEE(result as any),
-      gb7714: generateGB7714(result as any),
-    },
     references: Array.isArray(parsed?.references) ? parsed.references : [],
   };
 
-  // Re-generate citations with assembled result
-  result.citations = {
-    bibtex: generateBibTeX(result),
-    ieee: generateIEEE(result),
-    gb7714: generateGB7714(result),
+  // 最后组装 result，citations 引用 dataFields（避免 TDZ）
+  const result: ParseResult = {
+    ...dataFields,
+    citations: {
+      bibtex: generateBibTeX(dataFields),
+      ieee: generateIEEE(dataFields),
+      gb7714: generateGB7714(dataFields),
+    },
   };
 
   const hasMeaningfulData = result.title || result.authors.length > 0 || result.abstract;
