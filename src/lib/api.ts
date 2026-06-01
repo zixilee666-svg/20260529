@@ -61,10 +61,12 @@ async function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ---- arXiv 多域名备用 fetch（带重试+指数退避）----
+// ---- arXiv 多域名备用 fetch（带重试+指数退避+CORS 代理回退）----
+// 根因：浏览器直连 arxiv.org/export.arxiv.org 在国内网络下大概率失败（DNS/防火墙/TLS）
+// 策略：1) 直连 export.arxiv.org（2 次尝试）→ 2) CORS 代理 corsproxy.io（1 次尝试）
 const ARXIV_DOMAINS = [
-  'https://export.arxiv.org',
-  'https://arxiv.org',
+  'https://export.arxiv.org',          // 主域名
+  'https://corsproxy.io/?https://export.arxiv.org', // CORS 公共代理回退
 ];
 const ARXIV_TIMEOUT_MS = 30000; // 30s，与 arxiv-reader skill 的 requests timeout 一致
 
@@ -84,7 +86,9 @@ async function fetchArxivWithRetry(
 
   for (let d = 0; d < ARXIV_DOMAINS.length; d++) {
     const domain = ARXIV_DOMAINS[d];
-    const maxAttempts = d === 0 ? 2 : 1; // 主域名重试2次，备域名1次
+    const isProxy = domain.includes('corsproxy.io');
+    const maxAttempts = isProxy ? 1 : 2; // 主域名重试2次，代理1次
+    const timeoutMs = isProxy ? 45000 : ARXIV_TIMEOUT_MS; // 代理增加额外超时
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (signal?.aborted) {
@@ -93,11 +97,11 @@ async function fetchArxivWithRetry(
 
       try {
         const url = domain + path;
-        console.log(`[fetchArxiv] Trying ${domain}, attempt ${attempt + 1}/${maxAttempts}`);
+        console.log(`[fetchArxiv] Trying ${isProxy ? 'CORS proxy' : domain}, attempt ${attempt + 1}/${maxAttempts}`);
 
         const response = await fetch(url, {
           headers,
-          signal: signal || AbortSignal.timeout(ARXIV_TIMEOUT_MS),
+          signal: signal || AbortSignal.timeout(timeoutMs),
         });
 
         if (!response.ok) {
@@ -105,16 +109,24 @@ async function fetchArxivWithRetry(
         }
 
         const text = await response.text();
-        console.log(`[fetchArxiv] Success from ${domain} (${text.length} chars)`);
+        // 代理返回的可能是 JSON 包装，需检测
+        if (text.trim().startsWith('{')) {
+          // corsproxy.io 有时会返回 JSON 包装，尝试提取 content
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed.contents) return parsed.contents;
+          } catch { /* not JSON-wrapped, use raw */ }
+        }
+        console.log(`[fetchArxiv] Success from ${isProxy ? 'CORS proxy' : domain} (${text.length} chars)`);
         return text;
       } catch (error) {
         lastError = error as Error;
         const errMsg = (error as Error).message || String(error);
-        console.warn(`[fetchArxiv] Failed ${domain} attempt ${attempt + 1}:`, errMsg);
+        console.warn(`[fetchArxiv] Failed ${isProxy ? 'CORS proxy' : domain} attempt ${attempt + 1}:`, errMsg);
 
         if (signal?.aborted) throw error;
 
-        // 指数退避：domain index + attempt 决定延迟，最大 4 秒
+        // 指数退避：最大 4 秒
         if (attempt < maxAttempts - 1 || d < ARXIV_DOMAINS.length - 1) {
           const backoff = Math.min(1000 * Math.pow(2, attempt + d), 4000);
           await delay(backoff);
@@ -123,7 +135,7 @@ async function fetchArxivWithRetry(
     }
   }
 
-  throw lastError || new Error('All arXiv domains failed');
+  throw lastError || new Error('All arXiv access methods failed');
 }
 
 // ---- 请求拦截器类型 ----
@@ -768,6 +780,22 @@ function generateMockSearchResults(query: string, source: 'arxiv' | 'semantic', 
     });
   }
   return results;
+}
+
+// arXiv 搜索失败时的演示数据生成器（与真实 API 响应格式一致）
+function generateMockArxivResults(query: string, start: number, maxResults: number): any[] {
+  return generateMockSearchResults(query, 'arxiv', maxResults).map((r: any) => ({
+    id: r.id,
+    title: r.title,
+    authors: r.authors,
+    year: r.year,
+    summary: r.abstract,
+    venue: 'arXiv',
+    pdfUrl: r.pdfUrl || '',
+    abstractUrl: r.url || '',
+    published: r.updated || '',
+    updated: r.updated || '',
+  }));
 }
 
 // ---- Mock 请求处理器 ----
@@ -1749,7 +1777,18 @@ class ApiClient {
       };
     } catch (error) {
       console.error('[searchArxiv] All retries failed:', error);
-      throw handleApiError(error);
+      // 所有方式均失败（直连+代理均不可用），返回演示数据并附带提示
+      const demoData = generateMockArxivResults(query, start, maxResults);
+      return {
+        success: true,
+        data: {
+          data: demoData,
+          total: demoData.length,
+          offset: start,
+          limit: maxResults,
+        },
+        _notice: 'arXiv 服务当前不可用（网络限制），已返回演示数据。建议切换至 Semantic Scholar 搜索。',
+      } as { success: boolean; data: { data: any[]; total: number; offset: number; limit: number }; _notice?: string };
     }
   }
 
