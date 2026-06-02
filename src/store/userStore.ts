@@ -114,19 +114,30 @@ export const useSettingsStore = create<UserSettingsState>()(
             (resolved as any)[key] = (backendVal !== undefined && backendVal !== '') ? backendVal : localVal;
           }
 
-          console.log('[loadFromBackend] incoming data:', data);
-          console.log('[loadFromBackend] resolved external fields:', resolved);
-          console.log('[loadFromBackend] current state:', {
-            zoteroUserId: state.zoteroUserId,
-            zoteroApiKey: state.zoteroApiKey ? '***' : '',
-            aiModels: state.aiModels.length,
+          // AI 模型：后端 apiKey 可能为空，但结构完整（name/provider/baseUrl/model）才视为有效
+          const backendModels = data.aiModels;
+          const validBackendModels = (backendModels && backendModels.length > 0)
+            ? backendModels.map((m: any) => ({
+                ...m,
+                apiKey: m.apiKey || '',  // 确保 apiKey 始终为字符串
+              }))
+            : null;
+
+          console.log('[loadFromBackend] incoming data keys:', Object.keys(data));
+          console.log('[loadFromBackend] external fields resolved:', {
+            zoteroUserId: resolved.zoteroUserId,
+            zoteroApiKey: resolved.zoteroApiKey ? '***' : '',
+            semanticScholarApiKey: resolved.semanticScholarApiKey ? '***' : '',
+            githubToken: resolved.githubToken ? '***' : '',
+            githubUsername: resolved.githubUsername,
+            aiModels: validBackendModels ? validBackendModels.length : 0,
           });
 
           return {
             ...state,
             ...data,
             ...resolved,
-            aiModels: (data.aiModels && data.aiModels.length > 0) ? data.aiModels : state.aiModels,
+            aiModels: validBackendModels || state.aiModels,
             defaultAiModelId: data.defaultAiModelId || state.defaultAiModelId,
           };
         }),

@@ -84,7 +84,32 @@ function SettingsContent() {
     }
   }, [user]);
 
-  // Save profile to API
+  // 进入设置页面时自动从云端拉取最新配置（解决跨设备同步延迟）
+  const [hasPulledFromCloud, setHasPulledFromCloud] = useState(false);
+  useEffect(() => {
+    if (hasPulledFromCloud) return;
+    const pullFromCloud = async () => {
+      try {
+        const res = await api.getSettings();
+        if (res.success && res.data) {
+          const data = res.data as any;
+          // 仅当云端有实质数据时才合并（避免 DEFAULT_SETTINGS 覆盖本地值）
+          const hasCloudData = data.zoteroUserId || data.zoteroApiKey
+            || data.semanticScholarApiKey || data.githubToken || data.githubUsername
+            || data.imaApiKey || data.imaEndpoint || data.crawlabEndpoint || data.crawlabToken
+            || (data.aiModels && data.aiModels.length > 0);
+          if (hasCloudData) {
+            settings.loadFromBackend(data);
+            console.log('[SettingsPage] 已从云端拉取最新配置');
+          }
+        }
+      } catch { /* 非关键：云端拉取失败则继续使用本地配置 */ }
+    };
+    pullFromCloud();
+    setHasPulledFromCloud(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save profile to API（同时同步外部工具，实现一站式云端保存）
   const saveProfile = async () => {
     setSavingProfile(true);
     try {
@@ -92,8 +117,20 @@ function SettingsContent() {
         theme: mode,
         citationFormat: settings.citationFormat,
         notifications: settings.notifications,
-      } as Partial<UserSettings>);
-      toast.success('个人资料已保存');
+        // 同步附上外部工具配置（避免仅保存 profile 时覆盖 KV 中的外部工具为空）
+        zoteroUserId: settings.zoteroUserId,
+        zoteroApiKey: settings.zoteroApiKey,
+        semanticScholarApiKey: settings.semanticScholarApiKey,
+        githubToken: settings.githubToken,
+        githubUsername: settings.githubUsername,
+        imaApiKey: settings.imaApiKey,
+        imaEndpoint: settings.imaEndpoint,
+        crawlabEndpoint: settings.crawlabEndpoint,
+        crawlabToken: settings.crawlabToken,
+        aiModels: settings.aiModels,
+        defaultAiModelId: settings.defaultAiModelId,
+      } as any);
+      toast.success('个人资料已保存（含外部工具配置）');
     } catch {
       toast.error('保存失败，请重试');
     } finally {
@@ -875,21 +912,49 @@ function SettingsContent() {
               </CardContent>
             </Card>
 
-            {/* Save External Tools to Cloud */}
+            {/* Save & Pull External Tools */}
             <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
               <div>
                 <p className="text-sm font-medium">同步到云端</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  将外部工具配置（API Keys、AI 模型等）保存到云端，其他设备登录后自动同步
+                  将 API Keys、AI 模型等外部工具配置保存到云端，其他设备登录后自动同步
                 </p>
               </div>
-              <Button
-                onClick={saveExternalTools}
-                disabled={savingExternalTools}
-                size="sm"
-              >
-                {savingExternalTools ? '保存中...' : '保存配置'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const res = await api.getSettings();
+                      if (res.success && res.data) {
+                        const data = res.data as any;
+                        const hasCloudData = data.zoteroUserId || data.zoteroApiKey
+                          || data.semanticScholarApiKey || data.githubToken || data.githubUsername
+                          || data.imaApiKey || data.imaEndpoint || data.crawlabEndpoint || data.crawlabToken
+                          || (data.aiModels && data.aiModels.length > 0);
+                        if (hasCloudData) {
+                          settings.loadFromBackend(data);
+                          toast.success('已从云端拉取最新配置');
+                        } else {
+                          toast.info('云端暂无配置数据');
+                        }
+                      }
+                    } catch {
+                      toast.error('拉取失败，请检查网络');
+                    }
+                  }}
+                >
+                  从云端拉取
+                </Button>
+                <Button
+                  onClick={saveExternalTools}
+                  disabled={savingExternalTools}
+                  size="sm"
+                >
+                  {savingExternalTools ? '保存中...' : '保存配置'}
+                </Button>
+              </div>
             </div>
           </TabsContent>
 

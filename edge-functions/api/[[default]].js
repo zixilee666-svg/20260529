@@ -1836,7 +1836,11 @@ async function handleGetSettings(request, JWT_SECRET) {
   if (payload instanceof Response) return payload;
 
   const settings = await kvGetJson('users:settings:' + payload.userId);
-  return success(settings || DEFAULT_SETTINGS, 'Success', request);
+  // 防御：KV 可能返回空对象 {}（JSON.parse("{}") 是 truthy）
+  const isValid = settings && typeof settings === 'object' && Object.keys(settings).length > 0;
+  const merged = isValid ? { ...DEFAULT_SETTINGS, ...settings } : { ...DEFAULT_SETTINGS };
+  console.log(`[GetSettings] userId=${payload.userId}, fromKV=${isValid}, keys=${Object.keys(merged).length}`);
+  return success(merged, 'Success', request);
 }
 
 async function handleUpdateSettings(request, JWT_SECRET) {
@@ -1847,13 +1851,16 @@ async function handleUpdateSettings(request, JWT_SECRET) {
     const body = await request.json();
     const current = await kvGetJson('users:settings:' + payload.userId) || { ...DEFAULT_SETTINGS };
     const updated = { ...current, ...body, updatedAt: new Date().toISOString() };
+    console.log(`[UpdateSettings] userId=${payload.userId}, bodyKeys=[${Object.keys(body).join(',')}], totalKeys=${Object.keys(updated).length}`);
     const saved = await kvSetJson('users:settings:' + payload.userId, updated);
     if (!saved) {
       console.error('[Settings] kvSetJson failed for user:', payload.userId);
       return apiError('Failed to save settings to KV storage', 500, 'KV_SAVE_FAILED', request);
     }
+    console.log(`[UpdateSettings] Saved successfully for userId=${payload.userId}`);
     return success(updated, 'Settings updated', request);
   } catch (e) {
+    console.error('[UpdateSettings] Error:', e);
     return apiError('Invalid request', 400, 'BAD_REQUEST', request);
   }
 }
