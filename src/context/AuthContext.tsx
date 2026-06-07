@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import type { User } from '@/types';
-import { api, addErrorInterceptor, ApiErrorCode } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/userStore';
 
@@ -110,31 +110,17 @@ function getInitialState(): AuthState {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, undefined, getInitialState);
-  const hasHandled401 = useRef(false);
 
-  // 全局 401 拦截器：收到鉴权失败时自动登出并重定向到登录页
+  // 启动后立即检查：如果 token 无效但页面未跳转，主动跳转登录页
+  const initialChecked = useRef(false);
   useEffect(() => {
-    const removeInterceptor = addErrorInterceptor((error) => {
-      if (error.code === ApiErrorCode.UNAUTHORIZED && !hasHandled401.current) {
-        hasHandled401.current = true;
-        console.warn('[Auth] 检测到 401 Unauthorized，自动登出并跳转登录页');
-        // 清理所有 auth 相关存储
-        localStorage.removeItem('joan_auth_token');
-        localStorage.removeItem('joan_academic_user');
-        sessionStorage.setItem('joan_just_logged_out', 'true');
-        // 同步清理 Zustand
-        useAuthStore.getState().logout();
-        dispatch({ type: 'LOGOUT' });
-        // 延迟跳转，避免在渲染周期中直接操作 location
-        setTimeout(() => {
-          window.location.hash = '#/login';
-          hasHandled401.current = false;
-        }, 100);
-      }
-      return error;
-    });
-    return () => { removeInterceptor(); };
-  }, []);
+    if (initialChecked.current) return;
+    initialChecked.current = true;
+    if (!state.isAuthenticated && window.location.hash !== '#/login') {
+      console.warn('[Auth] 启动时检测到无效会话，跳转登录页');
+      window.location.hash = '#/login';
+    }
+  }, [state.isAuthenticated]);
 
   // Sync with Zustand store changes (e.g. logout from other components)
   const zustandUser = useAuthStore(s => s.user);

@@ -185,6 +185,24 @@ export function addErrorInterceptor(interceptor: ErrorInterceptor): () => void {
   };
 }
 
+// ---- 模块级 401 全局拦截器（同步注册，不依赖 React 生命周期）----
+let _401redirected = false;
+addErrorInterceptor((error) => {
+  if (error.code === ApiErrorCode.UNAUTHORIZED && !_401redirected) {
+    _401redirected = true;
+    console.warn('[Auth] 🔒 检测到 401 Unauthorized，清理会话并跳转登录页');
+    // 同步清理所有 auth 存储
+    try { localStorage.removeItem('joan_auth_token'); } catch { /* ignore */ }
+    try { localStorage.removeItem('joan_academic_user'); } catch { /* ignore */ }
+    try { sessionStorage.setItem('joan_just_logged_out', 'true'); } catch { /* ignore */ }
+    // 立即跳转（不延迟，避免渲染竞态）
+    window.location.hash = '#/login';
+    // 重置标记（以备后续恢复）
+    setTimeout(() => { _401redirected = false; }, 2000);
+  }
+  return error;
+});
+
 // 构建时确定：是否使用 Mock（默认 true）
 // 当部署到 EdgeOne 等纯前端环境时，VITE_MOCK_MODE 未设置 → 默认 Mock
 // 当本地开发连接真实后端时，设置 VITE_MOCK_MODE=false
